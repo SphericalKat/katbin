@@ -12,4 +12,10 @@ rocket_contrib = {version="0.4.4", default-features=false, features=["json"]}
 serde = "1.0"
 serde_json = "1.0"
 serde_derive = "1.0"
+diesel = {version = "1.4.4", features = ["postgres", "r2d2", "chrono"]}
+diesel_migrations = "1.4.0"
 dotenv = "0.15.0"
+jsonwebtoken = "7.1.2"
+slog = "2.5.2"
+slog-term = "2.6.0"
+slog-async = "2.5.0"
