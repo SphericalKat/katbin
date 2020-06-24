@@ -3,13 +3,15 @@
 #[macro_use]
 extern crate rocket;
 
-#[get("/alive")]
-fn alive() -> &'static str {
-    "OK"
-}
+pub mod api;
+pub mod core;
+
+
 
 fn main() {
-    rocket::ignite()
-        .mount("/", routes![index])
-        .launch();
+    let mut rocket = rocket::ignite();
+
+    rocket = api::routes::fuel(rocket);
+
+    rocket.launch();
 }
