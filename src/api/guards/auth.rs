@@ -45,12 +45,9 @@ mod date_serializer {
 }
 
 impl Claims {
-    pub fn new(username: String, access_level: AccessLevel) -> Claims {
+    pub fn new(username: String) -> Claims {
         let iat = Utc::now();
-        let exp = match access_level {
-            AccessLevel::Admin => iat + chrono::Duration::minutes(30),
-            _ => iat + chrono::Duration::days(1)
-        };
+        let exp = iat + chrono::Duration::days(1);
 
         Claims {
             username,
