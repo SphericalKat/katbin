@@ -31,6 +31,7 @@ fn main() {
 
     rocket = api::routes::fuel(rocket);
 
-    rocket.manage(logger)
-    .launch();
+    rocket.manage(utils::db::pool())
+        .manage(logger)
+        .launch();
 }
