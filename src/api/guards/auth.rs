@@ -13,7 +13,7 @@ use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Claims {
-    pub username: String,
+    pub user_id: String,
     #[serde(with = "date_serializer")]
     iat: DateTime<Utc>,
     #[serde(with = "date_serializer")]
@@ -23,6 +23,7 @@ pub struct Claims {
 mod date_serializer {
     use chrono::{DateTime, TimeZone, Utc};
     use serde::{self, Deserialize, Deserializer, Serializer};
+    use serde::de::Error;
 
     /// Serializes a DateTime<Utc> to a Unix timestamp (milliseconds since 1970/1/1T00:00:00T)
     pub fn serialize<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
@@ -40,17 +41,17 @@ mod date_serializer {
     {
         Utc.timestamp_opt(i64::deserialize(deserializer)?, 0)
             .single() // If there are multiple or no valid DateTimes from timestamp, return None
-            .ok_or_else(|| serde::de::Error::custom("invalid Unix timestamp value"))
+            .ok_or_else(|| Error::custom("invalid Unix timestamp value"))
     }
 }
 
 impl Claims {
-    pub fn new(username: String) -> Claims {
+    pub fn new(user_id: String) -> Claims {
         let iat = Utc::now();
         let exp = iat + chrono::Duration::days(1);
 
         Claims {
-            username,
+            user_id,
             iat: iat.date().and_hms_milli(iat.hour(), iat.minute(), iat.second(), 0),
             exp: exp.date().and_hms_milli(exp.hour(), exp.minute(), exp.second(), 0)
         }
