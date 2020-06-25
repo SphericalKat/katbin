@@ -5,10 +5,11 @@ use rocket::response::status::Custom;
 use rocket_contrib::json::Json;
 use serde_json::Value;
 
-use crate::core::paste::{entity::Paste, service::create_paste};
+use crate::core::paste::{entity::Paste, service::create_paste, service::fetch_paste};
 use crate::core::users::{service::create_or_fetch_user};
 use crate::utils::{db, phonetic_key};
 use crate::utils::phonetic_key::get_random_id;
+use diesel::result::Error;
 
 #[post("/", data = "<paste>")]
 fn create(mut paste: Json<Paste>, conn: db::DbConn, mut ck: Cookies) -> Custom<Json<Value>> {
@@ -54,6 +55,27 @@ fn create(mut paste: Json<Paste>, conn: db::DbConn, mut ck: Cookies) -> Custom<J
     }
 }
 
+#[get("/<id>")]
+fn fetch(id: String, conn: db::DbConn) -> Custom<Json<Value>> {
+    let paste = match fetch_paste(id, &conn) {
+        Ok(paste) => paste,
+        Err(err) => {
+            return match err.downcast_ref::<Error>() {
+                Some(Error::NotFound) => Custom(Status::NotFound, Json(json!({
+                    "err": err.to_string(),
+                    "msg": "Unable to find a paste with that ID"
+                }))),
+                _ => Custom(Status::InternalServerError, Json(json!({
+                    "err": err.to_string(),
+                    "msg": "Something went wrong, try again"
+                })))
+            }
+        }
+    };
+
+    Custom(Status::Found, Json(json!(paste)))
+}
+
 pub fn fuel(rocket: Rocket) -> Rocket {
-    rocket.mount("/api/paste", routes![create])
+    rocket.mount("/api/paste", routes![create, fetch])
 }

@@ -1,6 +1,6 @@
 table! {
     pastes (id) {
-        id -> Varchar,
+        id -> Nullable<Varchar>,
         belongs_to -> Nullable<Varchar>,
         is_url -> Bool,
         content -> Text,

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use diesel::pg::PgConnection;
-use diesel::RunQueryDsl;
+use diesel::prelude::*;
 
 use crate::schema::pastes;
 
@@ -11,4 +11,9 @@ pub fn create_paste(paste: &Paste, conn: &PgConnection) -> Result<usize> {
         .values(paste)
         .execute(conn)?;
     Ok(rows)
+}
+
+pub fn fetch_paste(id: String, conn: &PgConnection) -> Result<Paste> {
+    let paste = pastes::table.find(id).get_result::<Paste>(conn)?;
+    Ok(paste)
 }
