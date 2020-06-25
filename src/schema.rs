@@ -1,13 +1,4 @@
 table! {
-    games (id) {
-        id -> Int4,
-        name -> Text,
-        developer -> Text,
-        is_goty -> Bool,
-    }
-}
-
-table! {
     pastes (id) {
         id -> Varchar,
         belongs_to -> Nullable<Varchar>,
@@ -28,7 +19,6 @@ table! {
 joinable!(pastes -> users (belongs_to));
 
 allow_tables_to_appear_in_same_query!(
-    games,
     pastes,
     users,
 );

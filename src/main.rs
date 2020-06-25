@@ -16,6 +16,7 @@ extern crate slog;
 pub mod api;
 pub mod core;
 pub mod utils;
+pub mod schema;
 
 use slog_term;
 use slog_async;
