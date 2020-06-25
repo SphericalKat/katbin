@@ -3,13 +3,10 @@ use std::result::Result;
 use chrono::prelude::*;
 use jsonwebtoken::{Header, Algorithm, EncodingKey, Validation, DecodingKey};
 use rocket::request::{FromRequest, Outcome};
-use rocket::http::{Status, ContentType};
-use rocket::{Request, response, Response};
+use rocket::{Request};
 
 use crate::utils::errors::Error;
 use crate::utils::errors::ErrorCode;
-use rocket::response::Responder;
-use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Claims {
