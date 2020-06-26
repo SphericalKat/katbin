@@ -7,8 +7,9 @@ use serde_json::Value;
 
 use crate::core::paste::{entity::Paste, service::create_paste, service::fetch_paste};
 use crate::core::users::{service::create_or_fetch_user};
-use crate::utils::{db, phonetic_key};
-use crate::utils::phonetic_key::get_random_id;
+use crate::utils::phonetic_key;
+use crate::api::guards::db;
+
 use diesel::result::Error;
 
 #[post("/", data = "<paste>")]
@@ -17,7 +18,7 @@ fn create(mut paste: Json<Paste>, conn: db::DbConn, mut ck: Cookies) -> Custom<J
     let user_id = match ck.get_private("session") {
         Some(c) => c.value().to_string(),
         None => {
-            let user_id = get_random_id();
+            let user_id = phonetic_key::get_random_id();
             ck.add_private(Cookie::new("session", user_id.clone()));
             user_id
         }

@@ -95,32 +95,3 @@ impl<'r> Responder<'r> for Error {
             .ok()
     }
 }
-
-#[derive(Serialize)]
-pub struct Success {
-    msg: String
-}
-
-impl Success {
-    pub fn new(msg: &str) -> Success {
-        Success {
-            msg: msg.to_string()
-        }
-    }
-}
-
-impl<'r> Responder<'r> for Success {
-    fn respond_to(self, request: &Request) -> response::Result<'r> {
-        let logger = request.guard::<State<Logger>>();
-
-        if let Outcome::Success(logger) = logger {
-            info!(logger, "{}", serde_json::to_string(&self).unwrap());
-        }
-
-        Response::build()
-            .status(Status::Ok)
-            .header(ContentType::JSON)
-            .sized_body(Cursor::new(serde_json::to_string(&self).unwrap()))
-            .ok()
-    }
-}
