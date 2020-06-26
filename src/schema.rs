@@ -18,7 +18,4 @@ table! {
 
 joinable!(pastes -> users (belongs_to));
 
-allow_tables_to_appear_in_same_query!(
-    pastes,
-    users,
-);
+allow_tables_to_appear_in_same_query!(pastes, users,);

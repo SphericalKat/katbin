@@ -1,9 +1,9 @@
-use diesel::PgConnection;
-use diesel::r2d2::{PooledConnection, ConnectionManager};
-use rocket::{Request, request, State, Outcome};
-use rocket::request::FromRequest;
-use rocket::http::Status;
 use crate::utils::db::Pool;
+use diesel::r2d2::{ConnectionManager, PooledConnection};
+use diesel::PgConnection;
+use rocket::http::Status;
+use rocket::request::FromRequest;
+use rocket::{request, Outcome, Request, State};
 use std::ops::Deref;
 
 pub struct DbConn(pub PooledConnection<ConnectionManager<PgConnection>>);

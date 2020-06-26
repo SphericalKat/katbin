@@ -10,4 +10,3 @@ pub fn fuel(rocket: Rocket) -> Rocket {
     rocket = paste::fuel(rocket);
     rocket
 }
-

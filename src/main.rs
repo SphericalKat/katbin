@@ -16,12 +16,12 @@ extern crate slog;
 
 pub mod api;
 pub mod core;
-pub mod utils;
 pub mod schema;
+pub mod utils;
 
-use slog_term;
-use slog_async;
 use slog::{Drain, Logger};
+use slog_async;
+use slog_term;
 
 embed_migrations!("migrations");
 
@@ -31,7 +31,6 @@ fn run_migrations(logger: &Logger) {
         error!(logger, "migration error: {}", e.to_string());
     }
 }
-
 
 fn main() {
     dotenv::dotenv().ok();
@@ -48,7 +47,5 @@ fn main() {
     rocket = api::routes::fuel(rocket);
     rocket = api::catchers::fuel(rocket);
 
-    rocket.manage(utils::db::pool())
-        .manage(logger)
-        .launch();
+    rocket.manage(utils::db::pool()).manage(logger).launch();
 }

@@ -1,14 +1,18 @@
 use std::ops::DerefMut;
 
-use rocket::{http::{Cookie, Cookies, Status}, response::status, Rocket};
 use rocket::response::status::Custom;
+use rocket::{
+    http::{Cookie, Cookies, Status},
+    response::status,
+    Rocket,
+};
 use rocket_contrib::json::Json;
 use serde_json::Value;
 
-use crate::core::paste::{entity::Paste, service::create_paste, service::fetch_paste};
-use crate::core::users::{service::create_or_fetch_user};
-use crate::utils::phonetic_key;
 use crate::api::guards::db;
+use crate::core::paste::{entity::Paste, service::create_paste, service::fetch_paste};
+use crate::core::users::service::create_or_fetch_user;
+use crate::utils::phonetic_key;
 
 use diesel::result::Error;
 
@@ -27,10 +31,15 @@ fn create(mut paste: Json<Paste>, conn: db::DbConn, mut ck: Cookies) -> Custom<J
     // Create or fetch already existing user
     let user = match create_or_fetch_user(user_id, &conn) {
         Ok(user) => user,
-        Err(e) => return status::Custom(Status::InternalServerError, Json(json!({
-            "err": e.to_string(),
-            "msg": "Failed to create or fetch user"
-        })))
+        Err(e) => {
+            return status::Custom(
+                Status::InternalServerError,
+                Json(json!({
+                    "err": e.to_string(),
+                    "msg": "Failed to create or fetch user"
+                })),
+            )
+        }
     };
 
     let new_paste = paste.deref_mut();
@@ -41,18 +50,20 @@ fn create(mut paste: Json<Paste>, conn: db::DbConn, mut ck: Cookies) -> Custom<J
     new_paste.belongs_to = Some(user.id);
 
     match create_paste(new_paste, &conn) {
-        Ok(_) => {
-            status::Custom(Status::Created, Json(json!({
-                    "msg": "Successfully created paste",
-                    "paste_id": new_paste.id
-                })))
-        }
-        Err(e) => {
-            status::Custom(Status::InternalServerError, Json(json!({
+        Ok(_) => status::Custom(
+            Status::Created,
+            Json(json!({
+                "msg": "Successfully created paste",
+                "paste_id": new_paste.id
+            })),
+        ),
+        Err(e) => status::Custom(
+            Status::InternalServerError,
+            Json(json!({
                 "err": e.to_string(),
                 "msg": "Failed to create paste"
-            })))
-        }
+            })),
+        ),
     }
 }
 
@@ -62,14 +73,20 @@ fn fetch(id: String, conn: db::DbConn) -> Custom<Json<Value>> {
         Ok(paste) => paste,
         Err(err) => {
             return match err.downcast_ref::<Error>() {
-                Some(Error::NotFound) => Custom(Status::NotFound, Json(json!({
-                    "err": err.to_string(),
-                    "msg": "Unable to find a paste with that ID"
-                }))),
-                _ => Custom(Status::InternalServerError, Json(json!({
-                    "err": err.to_string(),
-                    "msg": "Something went wrong, try again"
-                })))
+                Some(Error::NotFound) => Custom(
+                    Status::NotFound,
+                    Json(json!({
+                        "err": err.to_string(),
+                        "msg": "Unable to find a paste with that ID"
+                    })),
+                ),
+                _ => Custom(
+                    Status::InternalServerError,
+                    Json(json!({
+                        "err": err.to_string(),
+                        "msg": "Something went wrong, try again"
+                    })),
+                ),
             }
         }
     };

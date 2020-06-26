@@ -1,6 +1,6 @@
-use diesel::prelude::*;
-use diesel::pg::PgConnection;
 use anyhow::Result;
+use diesel::pg::PgConnection;
+use diesel::prelude::*;
 
 use crate::core::users::entity::User;
 use crate::schema::users;

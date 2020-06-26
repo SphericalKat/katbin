@@ -1,5 +1,5 @@
 use anyhow::Result;
-use bcrypt::{DEFAULT_COST, hash};
+use bcrypt::{hash, DEFAULT_COST};
 use diesel::pg::PgConnection;
 use diesel::result::Error;
 
@@ -16,21 +16,19 @@ pub fn create_user(user: &mut User, conn: &PgConnection) -> Result<usize> {
 pub fn create_or_fetch_user(id: String, conn: &PgConnection) -> Result<User> {
     let user = match postgres::find_user(id.clone(), conn) {
         Ok(user) => user,
-        Err(err) => {
-            match err.downcast_ref::<Error>() {
-                Some(Error::NotFound) => {
-                    let new_user = User {
-                        id: id.clone(),
-                        username: None,
-                        password: None,
-                        activated: Some(false),
-                    };
-                    postgres::create_user(&new_user, conn)?;
-                    new_user
-                }
-                _ => return Err(err)
+        Err(err) => match err.downcast_ref::<Error>() {
+            Some(Error::NotFound) => {
+                let new_user = User {
+                    id: id.clone(),
+                    username: None,
+                    password: None,
+                    activated: Some(false),
+                };
+                postgres::create_user(&new_user, conn)?;
+                new_user
             }
-        }
+            _ => return Err(err),
+        },
     };
     Ok(user)
 }
