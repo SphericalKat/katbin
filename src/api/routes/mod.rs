@@ -1,5 +1,5 @@
-use rocket::Rocket;
 use crate::api::fairings::cors::CORS;
+use rocket::Rocket;
 
 pub mod health;
 pub mod paste;

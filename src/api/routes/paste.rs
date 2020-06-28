@@ -1,5 +1,6 @@
 use std::ops::DerefMut;
 
+use diesel::result::Error;
 use rocket::response::status::Custom;
 use rocket::{
     http::{Cookie, Cookies, Status},
@@ -13,8 +14,6 @@ use crate::api::guards::db;
 use crate::core::paste::{entity::Paste, service::create_paste, service::fetch_paste};
 use crate::core::users::service::create_or_fetch_user;
 use crate::utils::phonetic_key;
-
-use diesel::result::Error;
 
 #[post("/", data = "<paste>")]
 fn create(mut paste: Json<Paste>, conn: db::DbConn, mut ck: Cookies) -> Custom<Json<Value>> {

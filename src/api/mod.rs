@@ -1,6 +1,6 @@
 pub mod catchers;
-pub mod routes;
 pub mod fairings;
+pub mod routes;
 
 mod guards;
 mod misc;
