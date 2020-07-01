@@ -4,8 +4,19 @@ use rocket::Rocket;
 use rocket_contrib::json::Json;
 use serde_json::Value;
 
+#[catch(400)]
+pub fn bad_request() -> status::Custom<Json<Value>> {
+    status::Custom(
+        Status::BadRequest,
+        Json(json!({
+            "err": "bad request",
+            "msg": "Error parsing JSON body"
+        })),
+    )
+}
+
 #[catch(404)]
-fn not_found() -> status::Custom<Json<Value>> {
+pub fn not_found() -> status::Custom<Json<Value>> {
     status::Custom(
         Status::NotFound,
         Json(json!({
@@ -16,7 +27,7 @@ fn not_found() -> status::Custom<Json<Value>> {
 }
 
 #[catch(422)]
-fn unprocessable_entity() -> status::Custom<Json<Value>> {
+pub fn unprocessable_entity() -> status::Custom<Json<Value>> {
     status::Custom(
         Status::UnprocessableEntity,
         Json(json!({
@@ -28,7 +39,7 @@ fn unprocessable_entity() -> status::Custom<Json<Value>> {
 }
 
 #[catch(500)]
-fn internal_server_error() -> status::Custom<Json<Value>> {
+pub fn internal_server_error() -> status::Custom<Json<Value>> {
     status::Custom(
         Status::NotFound,
         Json(json!({
@@ -40,6 +51,7 @@ fn internal_server_error() -> status::Custom<Json<Value>> {
 
 pub fn fuel(rocket: Rocket) -> Rocket {
     rocket.register(catchers![
+        bad_request,
         not_found,
         unprocessable_entity,
         internal_server_error

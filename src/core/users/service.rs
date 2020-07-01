@@ -32,3 +32,11 @@ pub fn create_or_fetch_user(id: String, conn: &PgConnection) -> Result<User> {
     };
     Ok(user)
 }
+
+pub fn activate_user(user: &mut User, conn: &PgConnection) -> Result<User> {
+    let hashed_pass = hash(user.password.as_ref().unwrap().as_bytes(), DEFAULT_COST)?;
+    user.password = Some(hashed_pass);
+    let mut activated_user = postgres::update_user(user, conn)?;
+    activated_user.password = None;
+    Ok(activated_user)
+}
