@@ -5,6 +5,6 @@ use crate::schema::pastes;
 pub struct Paste {
     pub id: Option<String>,
     pub belongs_to: Option<String>,
-    pub is_url: bool,
+    pub is_url: Option<bool>,
     pub content: String,
 }

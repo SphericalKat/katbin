@@ -5,7 +5,7 @@ use super::entity::Paste;
 use super::postgres;
 
 pub fn create_paste(paste: &mut Paste, conn: &PgConnection) -> Result<usize> {
-    paste.is_url = validator::validate_url(paste.content.clone());
+    paste.is_url = Some(validator::validate_url(paste.content.clone()));
     postgres::create_paste(paste, conn)
 }
 

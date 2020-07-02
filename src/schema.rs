@@ -2,7 +2,7 @@ table! {
     pastes (id) {
         id -> Nullable<Varchar>,
         belongs_to -> Nullable<Varchar>,
-        is_url -> Bool,
+        is_url -> Nullable<Bool>,
         content -> Text,
     }
 }
