@@ -606,6 +606,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc6f3ad7b9d11a0c00842ff8de1b60ee58661048eb8049ed33c73594f359d7e6"
 
 [[package]]
+name = "jirachi"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d4dcf06f952eef788e3a08fae6c2937c8d729c7abe152b503f7474d97c6899f"
+dependencies = [
+ "anyhow",
+ "diesel",
+ "dotenv",
+]
+
+[[package]]
 name = "js-sys"
 version = "0.3.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -638,6 +649,7 @@ dependencies = [
  "diesel",
  "diesel_migrations",
  "dotenv",
+ "jirachi",
  "jsonwebtoken",
  "rocket",
  "rocket_contrib",

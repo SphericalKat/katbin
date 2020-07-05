@@ -24,6 +24,7 @@ slog-async = "2.5.0"
 bcrypt = "0.8.0"
 chrono = "0.4.11"
 uuid = { version = "0.8.1", features = ["serde", "v4"] }
+jirachi = "0.1.1"
 
 [profile.release]
 lto = "fat"
