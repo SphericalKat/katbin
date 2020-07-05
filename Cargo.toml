@@ -2,6 +2,10 @@
 name = "katbin"
 version = "0.1.0"
 authors = ["ATechnoHazard <amolele@gmail.com>"]
+license = "MIT"
+description = "Small, lightweight pastebin+URL shortener written in Rust."
+repository = "https://github.com/ATechnoHazard/katbin"
+homepage = "https://github.com/ATechnoHazard/katbin"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -25,6 +29,10 @@ bcrypt = "0.8.1"
 chrono = "0.4.12"
 uuid = { version = "0.8.1", features = ["serde", "v4"] }
 jirachi = "0.1.1"
+
+[dev-dependencies]
+diesel_cli = { version = "1.4.1", default-features = false, features = ["postgres"] }
+jirachi_cli = "0.1.2"
 
 [profile.release]
 lto = "fat"
