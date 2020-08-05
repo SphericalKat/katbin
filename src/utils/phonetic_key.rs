@@ -1,4 +1,5 @@
-use jirachi::Jirachi;
+use jirachi::collision_resistant::Jirachi;
+use jirachi::Wishable;
 
 
 
