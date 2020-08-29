@@ -61,7 +61,7 @@ fn fetch(id: String, conn: DbConn) -> Custom<Json<Value>> {
         }
     };
 
-    Custom(Status::Found, Json(json!(paste)))
+    Custom(Status::Ok, Json(json!(paste)))
 }
 
 pub fn fuel(rocket: Rocket) -> Rocket {
