@@ -751,9 +751,9 @@ checksum = "dc6f3ad7b9d11a0c00842ff8de1b60ee58661048eb8049ed33c73594f359d7e6"
 
 [[package]]
 name = "jirachi"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1813afc8d06a3f04b3a390022f22fdf34eb8a0858ae0208ec739b748e2357c1"
+checksum = "cd3774150b53c1d35fda75fe715c4779111be7090bb2dab4a43a83f90efedee0"
 dependencies = [
  "anyhow",
  "diesel",
