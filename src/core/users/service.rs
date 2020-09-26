@@ -33,6 +33,10 @@ pub fn create_or_fetch_user(id: String, conn: &PgConnection) -> Result<User> {
     Ok(user)
 }
 
+pub fn fetch_user(id: String, conn: &PgConnection) -> Result<User> {
+    postgres::find_user(id, conn)
+}
+
 pub fn activate_user(user: &mut User, conn: &PgConnection) -> Result<User> {
     let hashed_pass = hash(user.password.as_ref().unwrap().as_bytes(), DEFAULT_COST)?;
     user.password = Some(hashed_pass);

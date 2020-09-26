@@ -1,16 +1,17 @@
-use rocket::response::status::Custom;
+use anyhow::Result;
 use rocket::{
-    http::{Status},
+    http::Status,
     response::status,
     Rocket,
 };
+use rocket::response::status::Custom;
 use rocket_contrib::json::Json;
 use serde_json::Value;
 
 use crate::api::catchers::{internal_server_error, unprocessable_entity};
 use crate::api::guards::db::DbConn;
 use crate::core::users::entity::User;
-use crate::core::users::service::{activate_user, create_or_fetch_user};
+use crate::core::users::service::{activate_user, create_or_fetch_user, fetch_user};
 
 #[post("/", data = "<user>")]
 fn activate(mut user: Json<User>, conn: DbConn) -> Custom<Json<Value>> {
@@ -39,6 +40,11 @@ fn activate(mut user: Json<User>, conn: DbConn) -> Custom<Json<Value>> {
     }
 }
 
+#[get("/<id>")]
+fn fetch(id: String, conn: DbConn) -> Result<Json<User>> {
+    Ok(Json(fetch_user(id, &conn)?))
+}
+
 pub fn fuel(rocket: Rocket) -> Rocket {
-    rocket.mount("/api/user", routes![activate])
+    rocket.mount("/api/user", routes![activate, fetch])
 }
