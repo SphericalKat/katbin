@@ -9,12 +9,12 @@ pub mod user;
 pub fn fuel(rocket: Rocket) -> Rocket {
     let mut rocket = rocket;
 
-    let mut cors_options = CorsOptions::default();
+    let mut cors_options = CorsOptions::default().allow_credentials(true);
     cors_options.expose_headers.insert("Set-Cookie".to_owned());
-    cors_options.allow_credentials(true);
+    let cors = cors_options.to_cors().unwrap();
 
     rocket = health::fuel(rocket);
     rocket = paste::fuel(rocket);
     rocket = user::fuel(rocket);
-    rocket.attach(cors_options.to_cors().unwrap())
+    rocket.attach(cors)
 }

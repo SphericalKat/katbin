@@ -10,6 +10,7 @@ pub fn get_session_id(ck: &mut Cookies) -> String {
             let cookie = Cookie::build("session", user_id.clone())
                 .domain(".katb.in")
                 .same_site(SameSite::Lax)
+                .secure(true)
                 .permanent()
                 .finish();
             ck.add_private(cookie);
