@@ -8,10 +8,11 @@ use serde_json::Value;
 
 use crate::api::catchers::{forbidden, internal_server_error, not_found, unprocessable_entity};
 use crate::api::guards::db::DbConn;
-use crate::core::paste::{entity::Paste, service::{create_paste, fetch_paste, update_paste};};
+use crate::core::paste::{entity::Paste, service::{create_paste, fetch_paste, update_paste}};
 use crate::core::users::service::{create_or_fetch_user, fetch_user};
 use crate::utils::phonetic_key;
 use crate::utils::users::get_session_id;
+use crate::core::users::entity::User;
 
 #[post("/", data = "<paste>")]
 fn create(mut paste: Json<Paste>, conn: DbConn, mut ck: Cookies) -> Custom<Json<Value>> {
@@ -53,10 +54,10 @@ fn fetch(id: String, conn: DbConn, mut ck: Cookies) -> Custom<Json<Value>> {
     let user = match r_user {
         Ok(user) => user,
         Err(e) => {
-            return match e.downcast_ref::<Error>() {
-                Some(Error::NotFound) => not_found(),
-                _ => internal_server_error(),
-            };
+            match e.downcast_ref::<Error>() {
+                Some(Error::NotFound) => User::new(),
+                _ => return internal_server_error(),
+            }
         }
     };
 
