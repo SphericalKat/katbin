@@ -1,18 +1,14 @@
 use std::ops::DerefMut;
 
 use diesel::result::Error;
-use rocket::{
-    http::{Cookies, Status},
-    response::status,
-    Rocket,
-};
+use rocket::{http::{Cookies, Status}, response::status, Rocket};
 use rocket::response::status::Custom;
 use rocket_contrib::json::Json;
 use serde_json::Value;
 
-use crate::api::catchers::{internal_server_error, not_found};
+use crate::api::catchers::{forbidden, internal_server_error, not_found, unprocessable_entity};
 use crate::api::guards::db::DbConn;
-use crate::core::paste::{entity::Paste, service::create_paste, service::fetch_paste};
+use crate::core::paste::{entity::Paste, service::{create_paste, fetch_paste, update_paste};};
 use crate::core::users::service::{create_or_fetch_user, fetch_user};
 use crate::utils::phonetic_key;
 use crate::utils::users::get_session_id;
@@ -89,6 +85,50 @@ fn fetch(id: String, conn: DbConn, mut ck: Cookies) -> Custom<Json<Value>> {
     };
 }
 
+#[patch("/", data = "<paste>")]
+fn update(mut paste: Json<Paste>, conn: DbConn, mut ck: Cookies) -> Custom<Json<Value>> {
+    // Check if frontend sent a session cookie
+    let user_id = get_session_id(&mut ck);
+
+    // Create or fetch already existing user
+    let user = match fetch_user(user_id, &conn) {
+        Ok(user) => user,
+        Err(_) => {
+            return not_found();
+        }
+    };
+
+    let new_paste = paste.deref_mut();
+
+    if new_paste.id.is_none() {
+        return not_found();
+    }
+
+    new_paste.belongs_to = match fetch_paste(new_paste.id.as_ref().unwrap().clone(), &conn) {
+        Ok(paste) => paste.belongs_to,
+        Err(_) => return internal_server_error()
+    };
+
+    if new_paste.belongs_to.is_some() {
+        if *new_paste.belongs_to.as_ref().unwrap() == user.id {
+            match update_paste(new_paste, &conn) {
+                Ok(_) => status::Custom(
+                    Status::Created,
+                    Json(json!({
+                "msg": "Successfully created paste",
+                "paste_id": new_paste.id
+            })),
+                ),
+                Err(_) => internal_server_error(),
+            }
+        } else {
+            forbidden()
+        }
+    } else {
+        unprocessable_entity()
+    }
+}
+
 pub fn fuel(rocket: Rocket) -> Rocket {
-    rocket.mount("/api/paste", routes![create, fetch])
+    rocket.mount("/api/paste", routes![create, fetch, update])
 }

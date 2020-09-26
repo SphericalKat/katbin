@@ -38,6 +38,17 @@ pub fn unprocessable_entity() -> status::Custom<Json<Value>> {
     )
 }
 
+#[catch(403)]
+pub fn forbidden() -> status::Custom<Json<Value>> {
+    status::Custom(
+        Status::Forbidden,
+        Json(json!({
+            "err":"forbidden",
+            "msg": "You are not allowed to modify this resource"
+        })),
+    )
+}
+
 #[catch(500)]
 pub fn internal_server_error() -> status::Custom<Json<Value>> {
     status::Custom(
