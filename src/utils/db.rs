@@ -7,7 +7,7 @@ pub type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
 
 pub fn pool() -> Pool {
     let manager = ConnectionManager::<PgConnection>::new(database_url());
-    Pool::new(manager).expect("db pool")
+    Pool::builder().max_size(15).build(manager).unwrap()
 }
 
 fn database_url() -> String {
