@@ -7,7 +7,8 @@ pub type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
 
 pub fn pool() -> Pool {
     let manager = ConnectionManager::<PgConnection>::new(database_url());
-    Pool::builder().max_size(15).build(manager).unwrap()
+    let pool_size = env::var("KATBIN_POOL_SIZE").unwrap().parse::<u32>().expect("pool size");
+    Pool::builder().max_size(pool_size).build(manager).unwrap()
 }
 
 fn database_url() -> String {
