@@ -52,7 +52,7 @@ pub fn forbidden() -> status::Custom<Json<Value>> {
 #[catch(500)]
 pub fn internal_server_error() -> status::Custom<Json<Value>> {
     status::Custom(
-        Status::NotFound,
+        Status::InternalServerError,
         Json(json!({
             "err":"internal server error",
             "msg": "Something went wrong, try again"
