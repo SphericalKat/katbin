@@ -13,10 +13,10 @@ edition = "2018"
 [dependencies]
 rocket = "0.4.7"
 rocket_contrib = { version = "0.4.7", default-features = false, features = ["json"] }
-serde = "1.0.123"
-serde_json = "1.0.62"
-serde_derive = "1.0.123"
-diesel = { version = "1.4.5", features = ["postgres", "r2d2", "chrono"] }
+serde = "1.0.124"
+serde_json = "1.0.64"
+serde_derive = "1.0.124"
+diesel = { version = "1.4.6", features = ["postgres", "r2d2", "chrono"] }
 diesel_migrations = "1.4.0"
 dotenv = "0.15.0"
 jsonwebtoken = "7.2.0"
