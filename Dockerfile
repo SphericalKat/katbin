@@ -1,7 +1,7 @@
-FROM rustlang/rust:nightly as build
+FROM rustlang/rust:nightly
 
 COPY . .
 
 RUN cargo build --release
 
-CMD ["sh", "-c", "ROCKET_PORT=$PORT ROCKET_KEEP_ALIVE=0 ./target/release/katbin"]
+CMD ["sh", "-c", "ROCKET_KEEP_ALIVE=0 ./target/release/katbin"]
