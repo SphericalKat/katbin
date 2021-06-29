@@ -8,10 +8,10 @@ metadata:
 spec:
   tls:
     - hosts:
-      - testapi.katb.in
+      - api.katb.in
       secretName: katbin-tls
   rules:
-  - host: testapi.katb.in
+  - host: api.katb.in
     http:
       paths:
       - path: /
