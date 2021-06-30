@@ -40,7 +40,7 @@ fn main() {
     let drain = slog_async::Async::new(drain).build().fuse();
     let logger = slog::Logger::root(drain, o!());
 
-    run_migrations(&logger);
+    // run_migrations(&logger);
 
     let mut rocket = rocket::ignite();
 
