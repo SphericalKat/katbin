@@ -1,0 +1,16 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: katbin-ingress
+spec:
+  rules:
+  - host: testapi.katb.in
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: katbin-service
+            port: 
+              number: 80
