@@ -2,7 +2,14 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: katbin-ingress
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
 spec:
+  tls:
+    - hosts:
+      - testapi.katb.in
+      secretName: katbin-tls
   rules:
   - host: testapi.katb.in
     http:
