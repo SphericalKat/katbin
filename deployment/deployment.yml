@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: katbin-service
+
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: katbin-service
+  template:
+    metadata:
+      labels:
+        app: katbin-service
+    spec:
+      nodeSelector:
+        "beta.kubernetes.io/os": linux
+      containers:
+        - name: katbin-service
+          image: atechnohazard/katbin
+          env:
+            - name: KATBIN_POOL_SIZE
+              value: '5'
+            - name: JIRACHI_POOL_SIZE
+              value: '5'
+            - name: ROCKET_PORT
+              value: '5000'
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: katbin-secrets
+                  key: DATABASE_URL
+            - name: JIRACHI_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: katbin-secrets
+                  key: DATABASE_URL
+            - name: ROCKET_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: katbin-secrets
+                  key: ROCKET_SECRET_KEY
+          ports:
+            - containerPort: 5000
+              name: katbin-service
+          imagePullPolicy: Always
