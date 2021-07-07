@@ -8,16 +8,27 @@ metadata:
 spec:
   tls:
     - hosts:
-      - api.katb.in
+        - api.katb.in
+        - katb.in
       secretName: katbin-tls
   rules:
-  - host: api.katb.in
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: katbin-service
-            port: 
-              number: 80
+    - host: api.katb.in
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: katbin-service
+                port:
+                  number: 80
+    - host: katb.in
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: front-service
+                port:
+                  number: 81

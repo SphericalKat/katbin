@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: front-service
+
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: front-service
+  template:
+    metadata:
+      labels:
+        app: front-service
+    spec:
+      nodeSelector:
+        "beta.kubernetes.io/os": linux
+      containers:
+        - name: front-service
+          image: atechnohazard/katbin-web
+          ports:
+            - containerPort: 5000
+              name: front-service
+          resources:
+            limits:
+              cpu: 500m
+            requests:
+              cpu: 200m
+          imagePullPolicy: Always
