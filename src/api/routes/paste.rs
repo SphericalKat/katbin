@@ -6,7 +6,7 @@ use rocket::response::status::Custom;
 use rocket_contrib::json::Json;
 use serde_json::Value;
 
-use crate::api::catchers::{forbidden, internal_server_error, not_found, unprocessable_entity};
+use crate::{api::catchers::{forbidden, internal_server_error, not_found, unprocessable_entity}, utils::domain::get_domain};
 use crate::api::guards::db::DbConn;
 use crate::core::paste::{entity::Paste, service::{create_paste, fetch_paste, update_paste}};
 use crate::core::users::service::{create_or_fetch_user, fetch_user};
@@ -130,6 +130,25 @@ fn update(mut paste: Json<Paste>, conn: DbConn, mut ck: Cookies) -> Custom<Json<
     }
 }
 
+#[post("/", data = "<input>")]
+fn anonymous(input: String, conn: DbConn) -> String {
+    let mut new_paste = Paste {
+        id: Some(phonetic_key::get_random_id()),
+        belongs_to: None,
+        content: input,
+        is_url: None,
+    };
+
+    dbg!(new_paste.id.clone());
+
+    match create_paste(&mut new_paste, &conn) {
+        Ok(_) => format!("{}/{}", get_domain(), new_paste.id.unwrap()),
+        Err(_) => String::from("Internal Server Error"),
+    }
+}
+
 pub fn fuel(rocket: Rocket) -> Rocket {
-    rocket.mount("/api/paste", routes![create, fetch, update])
+    rocket
+    .mount("/api/paste", routes![create, fetch, update])
+    .mount("/", routes![anonymous])
 }
