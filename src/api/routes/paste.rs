@@ -161,5 +161,5 @@ fn anonymous(input: String, conn: DbConn) -> String {
 pub fn fuel(rocket: Rocket) -> Rocket {
     rocket
         .mount("/api/paste", routes![create, fetch, update])
-        .mount("/", routes![anonymous])
+        .mount("/api", routes![anonymous])
 }
