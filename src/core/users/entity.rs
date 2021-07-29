@@ -1,7 +1,7 @@
 use crate::schema::users;
 
+#[derive(Default, AsChangeset, Serialize, Deserialize, Queryable, Insertable)]
 #[table_name = "users"]
-#[derive(AsChangeset, Serialize, Deserialize, Queryable, Insertable)]
 pub struct User {
     pub id: String,
     pub username: Option<String>,

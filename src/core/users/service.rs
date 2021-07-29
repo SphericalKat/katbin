@@ -19,7 +19,7 @@ pub fn create_or_fetch_user(id: String, conn: &PgConnection) -> Result<User> {
         Err(err) => match err.downcast_ref::<Error>() {
             Some(Error::NotFound) => {
                 let new_user = User {
-                    id: id.clone(),
+                    id,
                     username: None,
                     password: None,
                     activated: Some(false),

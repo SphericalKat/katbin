@@ -16,7 +16,9 @@ pub fn create_paste(paste: &Paste, conn: &PgConnection) -> Result<usize> {
 
 pub fn update_paste(paste: &Paste, conn: &PgConnection) -> Result<Paste> {
     use crate::schema::pastes::dsl::*;
-    let updated_user = diesel::update(pastes.filter(id.eq(paste.id.as_ref().unwrap()))).set(paste).get_result(conn)?;
+    let updated_user = diesel::update(pastes.filter(id.eq(paste.id.as_ref().unwrap())))
+        .set(paste)
+        .get_result(conn)?;
     Ok(updated_user)
 }
 

@@ -64,7 +64,7 @@ impl Error {
     }
 
     fn set_msg(mut self) -> Self {
-        self.msg = match self.code.clone() {
+        self.msg = match self.code {
             ErrorCode::InvalidCredentials => "invalid credentials were provided".to_string(),
             ErrorCode::MultipleAuthToken => {
                 "multiple authorization tokens were provided".to_string()

@@ -15,8 +15,6 @@ extern crate serde_json;
 extern crate slog;
 
 use slog::{Drain, Logger};
-use slog_async;
-use slog_term;
 
 pub mod api;
 pub mod core;
@@ -40,7 +38,7 @@ fn main() {
     let drain = slog_async::Async::new(drain).build().fuse();
     let logger = slog::Logger::root(drain, o!());
 
-    // run_migrations(&logger);
+    run_migrations(&logger);
 
     let mut rocket = rocket::ignite();
 

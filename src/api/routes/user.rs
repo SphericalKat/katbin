@@ -1,11 +1,7 @@
 use anyhow::Result;
-use rocket::{
-    http::Status,
-    response::status,
-    Rocket,
-};
 use rocket::http::Cookies;
 use rocket::response::status::Custom;
+use rocket::{http::Status, response::status, Rocket};
 use rocket_contrib::json::Json;
 use serde_json::Value;
 
