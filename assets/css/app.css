@@ -3,6 +3,18 @@
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
 
+
+* {
+	font-family: 'JetBrains Mono', monospace;
+	background-color: #1a1a1a;
+	color: white;
+}
+
+a:hover  {
+	@apply text-amber;
+}
+
+
 @import "./phoenix.css";
 
 /* Alerts and form errors */

@@ -4,28 +4,34 @@
     <meta charset="utf-8"/>
     <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>Ketbin · Phoenix Framework</title>
+    <title>Katbin</title>
     <link rel="stylesheet" href="<%= Routes.static_path(@conn, "/css/app.css") %>"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script defer type="text/javascript" src="<%= Routes.static_path(@conn, "/js/app.js") %>"></script>
   </head>
   <body>
-    <header>
-      <section class="container">
-        <nav role="navigation">
-          <ul>
-            <li><a href="https://hexdocs.pm/phoenix/overview.html">Get Started</a></li>
-            <%= if function_exported?(Routes, :live_dashboard_path, 2) do %>
-              <li><%= link "LiveDashboard", to: Routes.live_dashboard_path(@conn, :home) %></li>
-            <% end %>
-          </ul>
-          <%= render "_user_menu.html", assigns %>
-        </nav>
-        <a href="https://phoenixframework.org/" class="phx-logo">
-          <img src="<%= Routes.static_path(@conn, "/images/phoenix.png") %>" alt="Phoenix Framework Logo"/>
-        </a>
-      </section>
+    <header class="flex w-full justify-between items-center py-3 px-6">
+     <a href="<%= Routes.page_path(@conn, :index) %>">
+        <span class="font-semibold text-xl tracking-tight">
+          <span class="text-amber">&lt;Kat</span>bin/&gt;
+        </span>
+      </a>
+
+      <nav role="navigation">
+        <ul>
+          <%= if function_exported?(Routes, :live_dashboard_path, 2) do %>
+            <li>
+            <%# <%= link "LiveDashboard", to: Routes.live_dashboard_path(@conn, :home) %>
+            </li>
+          <% end %>
+        </ul>
+        <%= render "_user_menu.html", assigns %>
+      </nav>
+
     </header>
-    <main role="main" class="container">
+    <main role="main">
       <p class="alert alert-info" role="alert"><%= get_flash(@conn, :info) %></p>
       <p class="alert alert-danger" role="alert"><%= get_flash(@conn, :error) %></p>
       <%= @inner_content %>
