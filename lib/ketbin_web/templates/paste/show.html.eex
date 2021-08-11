@@ -1,0 +1,18 @@
+<h1>Show Paste</h1>
+
+<ul>
+
+  <li>
+    <strong>Is url:</strong>
+    <%= @paste.is_url %>
+  </li>
+
+  <li>
+    <strong>Content:</strong>
+    <%= @paste.content %>
+  </li>
+
+</ul>
+
+<span><%= link "Edit", to: Routes.paste_path(@conn, :edit, @paste) %></span>
+<span><%= link "Back", to: Routes.paste_path(@conn, :index) %></span>
