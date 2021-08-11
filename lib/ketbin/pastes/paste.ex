@@ -2,6 +2,8 @@ defmodule Ketbin.Pastes.Paste do
   use Ecto.Schema
   import Ecto.Changeset
 
+  @primary_key {:id, :string, autogenerate: false}
+  @derive {Phoenix.Param, key: :id}
   schema "pastes" do
     field :content, :string
     field :is_url, :boolean, default: false
@@ -11,7 +13,7 @@ defmodule Ketbin.Pastes.Paste do
   @doc false
   def changeset(paste, attrs) do
     paste
-    |> cast(attrs, [:is_url, :content])
+    |> cast(attrs, [:is_url, :content, :id])
     |> validate_required([:is_url, :content])
   end
 end

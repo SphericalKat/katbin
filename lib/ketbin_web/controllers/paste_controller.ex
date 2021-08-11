@@ -15,6 +15,7 @@ defmodule KetbinWeb.PasteController do
   end
 
   def create(conn, %{"paste" => paste_params}) do
+    # paste_params = Map.put(paste_params, "id", s)
     case Pastes.create_paste(paste_params) do
       {:ok, paste} ->
         conn
