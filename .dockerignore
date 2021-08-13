@@ -33,4 +33,3 @@ npm-debug.log
 # this depending on your deployment strategy.
 /priv/static/
 .idea
-.env
