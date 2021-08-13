@@ -1,4 +1,4 @@
 
-<pre class="py-6">
+<pre class="py-6 font-bold">
 	<code><%= @paste.content %></code>
 </pre>

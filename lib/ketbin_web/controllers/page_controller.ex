@@ -3,6 +3,7 @@ defmodule KetbinWeb.PageController do
 
   alias Ketbin.Pastes
   alias Ketbin.Pastes.Paste
+  alias Ketbin.Pastes.Utils
 
   def index(conn, _params) do
     changeset = Pastes.change_paste(%Paste{})
@@ -15,12 +16,20 @@ defmodule KetbinWeb.PageController do
   end
 
   def create(conn, %{"paste" => paste_params}) do
-    # paste_params = Map.put(paste_params, "id", s)
+    id = Utils.generate_key()
+
+    is_url =
+      Map.get(paste_params, "content")
+      |> Utils.is_url?()
+
+    paste_params =
+      Map.put(paste_params, "id", id)
+      |> Map.put("is_url", is_url)
+
     case Pastes.create_paste(paste_params) do
       {:ok, paste} ->
         conn
-        |> put_flash(:info, "Paste created successfully.")
-        |> redirect(to: Routes.paste_path(conn, :show, paste))
+        |> redirect(to: Routes.page_path(conn, :show, paste))
 
       {:error, %Ecto.Changeset{} = changeset} ->
         render(conn, "index.html", changeset: changeset)

@@ -16,4 +16,13 @@ defmodule Ketbin.Pastes.Utils do
     Enum.map(0..length, fn i -> if Integer.mod(i, 2) == random, do: rand_consonant(), else: rand_vowel() end)
     |> List.to_string
   end
+
+  def is_url?(url) do
+    try do
+      uri = URI.parse(url)
+      uri.scheme != nil && uri.host =~ "." && Enum.member?(["https", "http"], uri.scheme)
+    rescue
+      FunctionClauseError -> false
+    end
+  end
 end

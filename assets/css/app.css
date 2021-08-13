@@ -22,6 +22,10 @@ header {
 	background-color: #1a1a1a
 }
 
+code {
+	font-family: 'JetBrains Mono', monospace;
+}
+
 @import "./phoenix.css";
 
 /* Alerts and form errors */
