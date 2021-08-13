@@ -1,5 +1,1 @@
-<h1>New Paste</h1>
-
 <%= render "form.html", Map.put(assigns, :action, Routes.paste_path(@conn, :create)) %>
-
-<span><%= link "Back", to: Routes.paste_path(@conn, :index) %></span>

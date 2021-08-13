@@ -1,0 +1,14 @@
+<%= form_for @changeset, @action, [class: "flex flex-col w-full h-full relative"], fn f -> %>
+    <%= if @changeset.action do %>
+        <div class="w-full text-center bg-amber">
+            <p>Oops, something went wrong!</p>
+        </div>
+    <% end %>
+
+    <div>
+        <%= textarea f, :content, [class: "w-full h-full px-6 py-4 outline-none bg-light-grey font-bold resize-none", placeholder: "> Paste, save, share! (Pasting just a URL will shorten it!)"] %>
+        <div class="absolute top-0 right-0 p-4">
+            <%= submit "Save" %>
+        </div>
+    </div>
+<% end %>

@@ -1,3 +1,1 @@
-<div>
-	hello, world!	
-</div>
+<%= render "form.html", Map.put(assigns, :action, Routes.page_path(@conn, :create)) %>
