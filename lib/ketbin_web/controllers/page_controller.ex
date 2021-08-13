@@ -29,6 +29,8 @@ defmodule KetbinWeb.PageController do
     # generate phonetic key
     id = Utils.generate_key()
 
+    IO.puts(conn.assigns[:current_user])
+
     # check if content is a url
     is_url =
       Map.get(paste_params, "content")

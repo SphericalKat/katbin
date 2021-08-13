@@ -45,6 +45,10 @@ USER nobody:nobody
 
 COPY --from=build --chown=nobody:nobody /app/_build/prod/rel/ketbin ./
 
+COPY --chown=nobody:nobody startup.sh startup.sh
+
+RUN chmod +x /app/startup.sh
+
 ENV HOME=/app
 
-CMD ["bin/ketbin", "start"]
+CMD ["/app/startup.sh"]
