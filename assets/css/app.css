@@ -3,61 +3,25 @@
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
 
-
 * {
-	font-family: 'JetBrains Mono', monospace;
-	color: white;
+  font-family: "JetBrains Mono", monospace;
+  color: white;
 }
 
-a:hover  {
-	@apply text-amber;
+html,
+body {
+  width: 100%;
+  height: 100%;
 }
 
-html, body {
-	width: 100%;
-	height: 100%;
+a:hover {
+  @apply text-amber;
 }
 
 header {
-	background-color: #1a1a1a
+  background-color: #1a1a1a;
 }
 
 code {
-	font-family: 'JetBrains Mono', monospace;
-}
-
-@import "./phoenix.css";
-
-/* Alerts and form errors */
-.alert {
-  padding: 15px;
-  margin-bottom: 20px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-}
-.alert-info {
-  color: #31708f;
-  background-color: #d9edf7;
-  border-color: #bce8f1;
-}
-.alert-warning {
-  color: #8a6d3b;
-  background-color: #fcf8e3;
-  border-color: #faebcc;
-}
-.alert-danger {
-  color: #a94442;
-  background-color: #f2dede;
-  border-color: #ebccd1;
-}
-.alert p {
-  margin-bottom: 0;
-}
-.alert:empty {
-  display: none;
-}
-.invalid-feedback {
-  color: #a94442;
-  display: block;
-  margin: -1rem 0 2rem;
+  font-family: "JetBrains Mono", monospace;
 }
