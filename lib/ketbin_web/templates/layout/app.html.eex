@@ -31,7 +31,7 @@
       </nav>
 
     </header>
-    <main role="main">
+    <main class="w-full h-full bg-light-grey" role="main">
       <p class="alert alert-info" role="alert"><%= get_flash(@conn, :info) %></p>
       <p class="alert alert-danger" role="alert"><%= get_flash(@conn, :error) %></p>
       <%= @inner_content %>

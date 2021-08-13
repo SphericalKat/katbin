@@ -1,0 +1,4 @@
+
+<pre class="py-6">
+	<code><%= @paste.content %></code>
+</pre>
