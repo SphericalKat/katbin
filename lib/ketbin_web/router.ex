@@ -21,6 +21,7 @@ defmodule KetbinWeb.Router do
 
     get "/", PageController, :index
     get "/:id", PageController, :show
+    get "/v/:id", PageController, :showlink
     post "/", PageController, :create
   end
 

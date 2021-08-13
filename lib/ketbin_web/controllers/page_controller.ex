@@ -12,6 +12,16 @@ defmodule KetbinWeb.PageController do
 
   def show(conn, %{"id" => id}) do
     paste = Pastes.get_paste!(id)
+
+    if paste.is_url do
+      redirect(conn, external: paste.content)
+    else
+      render(conn, "show.html", paste: paste)
+    end
+  end
+
+  def showlink(conn, %{"id" => id}) do
+    paste = Pastes.get_paste!(id)
     render(conn, "show.html", paste: paste)
   end
 
@@ -28,8 +38,13 @@ defmodule KetbinWeb.PageController do
 
     case Pastes.create_paste(paste_params) do
       {:ok, paste} ->
-        conn
-        |> redirect(to: Routes.page_path(conn, :show, paste))
+        unless is_url do
+          conn
+          |> redirect(to: Routes.page_path(conn, :show, paste))
+        else
+          conn
+          |> redirect(to: Routes.page_path(conn, :showlink, paste))
+        end
 
       {:error, %Ecto.Changeset{} = changeset} ->
         render(conn, "index.html", changeset: changeset)
