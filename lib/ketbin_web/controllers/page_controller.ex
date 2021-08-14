@@ -25,6 +25,11 @@ defmodule KetbinWeb.PageController do
     render(conn, "show.html", paste: paste)
   end
 
+  def raw(conn, %{"id" => id}) do
+    paste = Pastes.get_paste!(id)
+    text(conn, paste.content)
+  end
+
   def create(conn, %{"paste" => paste_params}) do
     # generate phonetic key
     id = Utils.generate_key()

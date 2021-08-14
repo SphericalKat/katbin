@@ -17,10 +17,11 @@ defmodule KetbinWeb.Router do
   end
 
   scope "/", KetbinWeb do
-    pipe_through :browser
+    pipe_through [:browser, :fetch_current_user]
 
     get "/", PageController, :index
     get "/:id", PageController, :show
+    get "/:id/raw", PageController, :raw
     get "/v/:id", PageController, :showlink
     post "/", PageController, :create
   end

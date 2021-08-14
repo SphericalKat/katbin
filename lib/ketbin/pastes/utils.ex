@@ -20,7 +20,7 @@ defmodule Ketbin.Pastes.Utils do
   def is_url?(url) do
     try do
       uri = URI.parse(url)
-      uri.scheme != nil && uri.host =~ "." && Enum.member?(["https", "http"], uri.scheme)
+      uri.scheme != nil && uri.host =~ "." && Enum.member?(["https", "http", "mailto"], uri.scheme) && !(uri.host =~ "katb.in")
     rescue
       FunctionClauseError -> false
     end
