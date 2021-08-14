@@ -9,6 +9,10 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 module.exports = (env, options) => {
   const devMode = options.mode !== 'production';
 
+	const PATHS = {
+		src: path.join(__dirname, '../')
+	}
+
   return {
     optimization: {
       minimizer: [
@@ -47,7 +51,7 @@ module.exports = (env, options) => {
     },
     plugins: [
       new MiniCssExtractPlugin({ filename: '../css/app.css' }),
-      new CopyWebpackPlugin([{ from: 'static/', to: '../' }])
+      new CopyWebpackPlugin([{ from: 'static/', to: '../' }]),
     ]
     .concat(devMode ? [new HardSourceWebpackPlugin()] : [])
   }
