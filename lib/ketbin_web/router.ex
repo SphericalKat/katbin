@@ -17,13 +17,16 @@ defmodule KetbinWeb.Router do
   end
 
   scope "/", KetbinWeb do
-    pipe_through :browser
+    pipe_through [:browser, :owns_paste]
 
     get "/", PageController, :index
     get "/:id", PageController, :show
     get "/:id/raw", PageController, :raw
     get "/v/:id", PageController, :showlink
+    get "/edit/:id", PageController, :edit
     post "/", PageController, :create
+    patch "/:id", PageController, :update
+    put "/:id", PageController, :update
   end
 
   # Other scopes may use custom stacks.

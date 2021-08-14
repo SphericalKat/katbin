@@ -1,4 +1,5 @@
 defmodule KetbinWeb.UserAuth do
+  require Logger
   import Plug.Conn
   import Phoenix.Controller
 
@@ -92,6 +93,11 @@ defmodule KetbinWeb.UserAuth do
     {user_token, conn} = ensure_user_token(conn)
     user = user_token && Accounts.get_user_by_session_token(user_token)
     assign(conn, :current_user, user)
+  end
+
+  def owns_paste(%{assigns: %{current_user: user}} = conn, _params) do
+    Logger.info("USER: #{inspect(user)}")
+    conn
   end
 
   defp ensure_user_token(conn) do
