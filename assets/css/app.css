@@ -15,7 +15,7 @@ body {
 }
 
 a:hover {
-  @apply text-amber;
+  color: #ff9800
 }
 
 header {
@@ -24,4 +24,10 @@ header {
 
 code {
   font-family: "JetBrains Mono", monospace;
+}
+
+code {
+	white-space: pre;
+	font-size: 14px;
+	font-weight: bold;
 }

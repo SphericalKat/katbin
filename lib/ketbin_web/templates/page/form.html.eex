@@ -5,7 +5,7 @@
         </div>
     <% end %>
 
-    <div>
+    <div class="w-full h-full">
         <%= textarea f, :content, [class: "w-full h-full px-6 py-4 outline-none bg-light-grey font-bold resize-none", placeholder: "> Paste, save, share! (Pasting just a URL will shorten it!)"] %>
         <div class="absolute top-0 right-0 p-4">
             <button type="submit">

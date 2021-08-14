@@ -17,7 +17,7 @@ defmodule KetbinWeb.Router do
   end
 
   scope "/", KetbinWeb do
-    pipe_through [:browser, :fetch_current_user]
+    pipe_through :browser
 
     get "/", PageController, :index
     get "/:id", PageController, :show

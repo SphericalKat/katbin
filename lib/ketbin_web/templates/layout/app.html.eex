@@ -31,10 +31,28 @@
       </nav>
 
     </header>
-    <main class="w-full h-full bg-light-grey" role="main">
+    <main class="flex flex-col w-full h-full max-h-full overflow-hidden bg-light-grey" role="main">
       <p class="alert alert-info" role="alert"><%= get_flash(@conn, :info) %></p>
       <p class="alert alert-danger" role="alert"><%= get_flash(@conn, :error) %></p>
       <%= @inner_content %>
     </main>
+    <footer class="font-bold">
+      <div class="copy-bg sm:hidden">
+      <button aria-label="Copy" viewbox="0 0 24 24" class="h-6 w-6 cursor-pointer fill-current text-white mr-4 copy-btn"">
+        <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24">
+          <path d="M0 0h24v24H0z" fill="none"></path>
+          <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"></path>
+        </svg>
+      </button>
+    </div>
+    <div class="flex px-4 py-1 text-xs sm:text-base justify-between text-amber" style="background: #1a1a1a; font-family: JetbrainsMono">
+      <a href="https://sphericalk.at">
+        © <%= DateTime.utc_now().year %> SphericalKat
+      </a>
+      <a href="https://github.com/sphericalkat/katbin-elixir">
+        GitHub
+      </a>
+      </div>
+    </footer>
   </body>
 </html>

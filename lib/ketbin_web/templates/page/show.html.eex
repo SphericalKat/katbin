@@ -1,4 +1,2 @@
 
-<pre class="py-6 font-bold">
-	<code><%= @paste.content %></code>
-</pre>
+	<code class="break-word pl-2 h-full w-full nomarkdown overflow-y-auto"><%= @paste.content %></code>
