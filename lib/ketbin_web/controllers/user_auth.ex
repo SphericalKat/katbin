@@ -1,9 +1,9 @@
 defmodule KetbinWeb.UserAuth do
-  require Logger
   import Plug.Conn
   import Phoenix.Controller
 
   alias Ketbin.Accounts
+  alias Ketbin.Pastes
   alias KetbinWeb.Router.Helpers, as: Routes
 
   # Make the remember me cookie valid for 60 days.
@@ -95,9 +95,21 @@ defmodule KetbinWeb.UserAuth do
     assign(conn, :current_user, user)
   end
 
-  def owns_paste(%{assigns: %{current_user: user}} = conn, _params) do
-    Logger.info("USER: #{inspect(user)}")
-    conn
+  def owns_paste(%{params: %{"id" => id}, assigns: %{current_user: user}} = conn, _params) do
+    paste = Pastes.get_paste!(id)
+    assign(conn, :show_edit, (user && user.id == paste.belongs_to) || false)
+  end
+
+  def ensure_owns_paste(%{params: %{"id" => id}, assigns: %{current_user: user}} = conn, _params) do
+    paste = Pastes.get_paste!(id)
+    allow_edit = (user && user.id == paste.belongs_to) || false
+    unless allow_edit do
+      conn
+      |> put_flash(:error, "You don't own this paste!")
+      |> redirect(to: Routes.page_path(conn, :show, id))
+    else
+      conn
+    end
   end
 
   defp ensure_user_token(conn) do

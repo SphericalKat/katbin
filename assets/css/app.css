@@ -40,9 +40,11 @@ code {
 .alert-info {
 	background-color: #1ed98e;
 	color: black;
+	font-weight: bold;
 }
 
 .alert-danger {
 	background-color: #ff9800;
 	color: black;
+	font-weight: bold;
 }

@@ -17,14 +17,27 @@ defmodule KetbinWeb.Router do
   end
 
   scope "/", KetbinWeb do
-    pipe_through [:browser, :owns_paste]
+    pipe_through :browser
 
     get "/", PageController, :index
-    get "/:id", PageController, :show
     get "/:id/raw", PageController, :raw
-    get "/v/:id", PageController, :showlink
-    get "/edit/:id", PageController, :edit
+
     post "/", PageController, :create
+  end
+
+  # scope to check if user is owner of paste
+  scope "/", KetbinWeb do
+    pipe_through [:browser, :owns_paste]
+
+    get "/:id", PageController, :show
+    get "/v/:id", PageController, :showlink
+  end
+
+  # scope to ensure user is owner of paste
+  scope "/", KetbinWeb do
+    pipe_through [:browser, :ensure_owns_paste]
+
+    get "/edit/:id", PageController, :edit
     patch "/:id", PageController, :update
     put "/:id", PageController, :update
   end

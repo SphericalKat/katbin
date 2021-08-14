@@ -12,14 +12,8 @@ defmodule KetbinWeb.PageController do
     render(conn, "index.html", changeset: changeset)
   end
 
-  def show(conn, %{"id" => id}) do
+  def show(%{assigns: %{show_edit: show_edit}} = conn, %{"id" => id}) do
     paste = Pastes.get_paste!(id) # fetch paste from db
-
-    # pull off current user if exists
-    current_user = conn.assigns.current_user
-
-    # show edit if current user matches creator of paste
-    show_edit = current_user && current_user.id || false
 
     if paste.is_url do # paste is a url, redirect
       redirect(conn, external: paste.content)
@@ -28,15 +22,8 @@ defmodule KetbinWeb.PageController do
     end
   end
 
-  def showlink(conn, %{"id" => id}) do
+  def showlink(%{assigns: %{show_edit: show_edit}} = conn, %{"id" => id}) do
     paste = Pastes.get_paste!(id)
-
-    # pull off current user if exists
-    current_user = conn.assigns.current_user
-
-    # show edit if current user matches creator of paste
-    show_edit = current_user && current_user.id || false
-
     render(conn, "show.html", paste: paste, show_edit: show_edit)
   end
 
@@ -45,7 +32,7 @@ defmodule KetbinWeb.PageController do
     text(conn, paste.content)
   end
 
-  def create(conn, %{"paste" => paste_params}) do
+  def create(%{assigns: %{current_user: current_user}} = conn, %{"paste" => paste_params}) do
     # generate phonetic key
     id = Utils.generate_key()
 
@@ -53,9 +40,6 @@ defmodule KetbinWeb.PageController do
     is_url =
       Map.get(paste_params, "content")
       |> Utils.is_url?()
-
-    # pull off current user if exists
-    current_user = conn.assigns.current_user
 
     # put id and is_url values into changeset
     paste_params =
