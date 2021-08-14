@@ -6,6 +6,8 @@
 * {
   font-family: "JetBrains Mono", monospace;
   color: white;
+	font-size: 14px;
+	font-weight: bold;
 }
 
 html,
@@ -28,6 +30,11 @@ code {
 
 code {
 	white-space: pre;
+	font-size: 14px;
+	font-weight: bold;
+}
+
+textarea {
 	font-size: 14px;
 	font-weight: bold;
 }

@@ -42,7 +42,7 @@
         © <%= DateTime.utc_now().year %> SphericalKat
       </a>
       <a href="https://github.com/sphericalkat/katbin-elixir">
-        GitHub
+        Fork me!
       </a>
       </div>
     </footer>
