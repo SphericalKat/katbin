@@ -1,27 +1,34 @@
-<h1>Log in</h1>
+<div class="flex flex-col w-full h-full justify-center items-center">
+	<h1 class="font-bold text-4xl text-amber pt-4">Log in</h1>
 
-<%= form_for @conn, Routes.user_session_path(@conn, :create), [as: :user], fn f -> %>
-  <%= if @error_message do %>
-    <div class="alert alert-danger">
-      <p><%= @error_message %></p>
-    </div>
-  <% end %>
+	<%= form_for @conn, Routes.user_session_path(@conn, :create), [as: :user, class: "flex flex-col h-full justify-center items-start m-auto"], fn f -> %>
+		<%= if @error_message do %>
+			<div class="alert alert-danger">
+				<p><%= @error_message %></p>
+			</div>
+		<% end %>
 
-  <%= label f, :email %>
-  <%= email_input f, :email, required: true %>
+		<div class="flex flex-col w-full">
+			<%= label f, :email %>
+			<%= email_input f, :email, [class: "text-black px-2 py-1 outline-none", required: true] %>
+		</div>
 
-  <%= label f, :password %>
-  <%= password_input f, :password, required: true %>
+		<div class="flex flex-col mt-2 w-full">
+			<%= label f, :password %>
+			<%= password_input f, :password, [class: "text-black px-2 py-1 outline-none", required: true] %>
+		</div>
+		<div class="flex mt-2 w-full justify-center items-center">
+			<%= checkbox f, :remember_me,  [class: "mr-2 outline-none"] %>
+			<%= label f, :remember_me, "Keep me logged in for 60 days" %>
+		</div>
 
-  <%= label f, :remember_me, "Keep me logged in for 60 days" %>
-  <%= checkbox f, :remember_me %>
+		<div class="bg-amber mt-4 rounded-sm px-2 py-1">
+				<%= submit "Log in" %>
+			</div>
+	<% end %>
 
-  <div>
-    <%= submit "Log in" %>
-  </div>
-<% end %>
-
-<p>
-  <%= link "Register", to: Routes.user_registration_path(@conn, :new) %> |
-  <%= link "Forgot your password?", to: Routes.user_reset_password_path(@conn, :new) %>
-</p>
+	<p class="mb-4 text-amber">
+		<%= link "Register", to: Routes.user_registration_path(@conn, :new) %> |
+		<%= link "Forgot your password?", to: Routes.user_reset_password_path(@conn, :new) %>
+	</p>
+</div>
