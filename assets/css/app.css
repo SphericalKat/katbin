@@ -31,3 +31,18 @@ code {
 	font-size: 14px;
 	font-weight: bold;
 }
+
+.alert {
+	width: 100%;
+	text-align: center;
+}
+
+.alert-info {
+	background-color: #1ed98e;
+	color: black;
+}
+
+.alert-danger {
+	background-color: #ff9800;
+	color: black;
+}
