@@ -1,4 +1,6 @@
 defmodule KetbinWeb.PageController do
+  require Logger
+
   use KetbinWeb, :controller
 
   alias Ketbin.Pastes
@@ -34,17 +36,19 @@ defmodule KetbinWeb.PageController do
     # generate phonetic key
     id = Utils.generate_key()
 
-    IO.puts(conn.assigns[:current_user])
-
     # check if content is a url
     is_url =
       Map.get(paste_params, "content")
       |> Utils.is_url?()
 
+    # pull off current user if exists
+    current_user = conn.assigns.current_user
+
     # put id and is_url values into changeset
     paste_params =
       Map.put(paste_params, "id", id)
       |> Map.put("is_url", is_url)
+      |> Map.put("belongs_to", (if current_user, do: current_user.id, else: nil))
 
     # attempt to create a paste
     case Pastes.create_paste(paste_params) do

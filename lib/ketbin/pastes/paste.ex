@@ -13,7 +13,7 @@ defmodule Ketbin.Pastes.Paste do
   @doc false
   def changeset(paste, attrs) do
     paste
-    |> cast(attrs, [:is_url, :content, :id])
+    |> cast(attrs, [:is_url, :content, :id, :belongs_to])
     |> validate_required([:is_url, :content])
   end
 end
