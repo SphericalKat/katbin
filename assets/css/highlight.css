@@ -233,3 +233,7 @@
 .source .block {
   display: inline;
 }
+
+span .block {
+	display: inline;
+}

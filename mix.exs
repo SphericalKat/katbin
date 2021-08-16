@@ -47,7 +47,8 @@ defmodule Ketbin.MixProject do
       {:jason, "~> 1.0"},
       {:plug_cowboy, "~> 2.0"},
       {:phx_gen_auth, "~> 0.7", only: [:dev], runtime: false},
-      {:rustler, "~> 0.22-rc"}
+      {:rustler, "~> 0.22-rc"},
+      {:html_sanitize_ex, "~> 1.4"},
     ]
   end
 
