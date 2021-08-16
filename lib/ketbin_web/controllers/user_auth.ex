@@ -97,12 +97,14 @@ defmodule KetbinWeb.UserAuth do
   end
 
   def owns_paste(%{params: %{"id" => id}, assigns: %{current_user: user}} = conn, _params) do
-    paste = Pastes.get_paste!(id)
+    [head|_tail] = String.split(id, ".")
+    paste = Pastes.get_paste!(head)
     assign(conn, :show_edit, (user && user.id == paste.belongs_to) || false)
   end
 
   def ensure_owns_paste(%{params: %{"id" => id}, assigns: %{current_user: user}} = conn, _params) do
-    paste = Pastes.get_paste!(id)
+    [head|_tail] = String.split(id, ".")
+    paste = Pastes.get_paste!(head)
     allow_edit = (user && user.id == paste.belongs_to) || false
     unless allow_edit do
       conn

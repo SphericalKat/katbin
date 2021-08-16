@@ -13,21 +13,24 @@ defmodule KetbinWeb.PageController do
   end
 
   def show(%{assigns: %{show_edit: show_edit}} = conn, %{"id" => id}) do
+    [head | tail] = String.split(id, ".")
+
     # fetch paste from db
-    paste = Pastes.get_paste!(id)
+    paste = Pastes.get_paste!(head)
 
     # paste is a url, redirect
     # regular paste, show content
     if paste.is_url do
       redirect(conn, external: paste.content)
     else
-      render(conn, "show.html", paste: paste, show_edit: show_edit)
+      render(conn, "show.html", paste: paste, show_edit: show_edit, extension: List.first(tail) || "")
     end
   end
 
   def showlink(%{assigns: %{show_edit: show_edit}} = conn, %{"id" => id}) do
-    paste = Pastes.get_paste!(id)
-    render(conn, "show.html", paste: paste, show_edit: show_edit)
+    [head | tail] = String.split(id, ".")
+    paste = Pastes.get_paste!(head)
+    render(conn, "show.html", paste: paste, show_edit: show_edit, extension: List.first(tail) || "")
   end
 
   def raw(conn, %{"id" => id}) do

@@ -8,5 +8,5 @@
 		</a>
 		<% end %>
 	</div>
-	<code class="break-word px-6 py-4 h-full w-full nomarkdown overflow-y-auto"><%= raw Ketbin.Utils.Syntax.highlight_text(@paste.content, "rs") %></code>
+	<code class="break-word px-6 py-4 h-full w-full nomarkdown overflow-y-auto"><%= raw Ketbin.Utils.Syntax.highlight_text(@paste.content, @extension) %></code>
 </div>
