@@ -13,11 +13,14 @@ defmodule KetbinWeb.PageController do
   end
 
   def show(%{assigns: %{show_edit: show_edit}} = conn, %{"id" => id}) do
-    paste = Pastes.get_paste!(id) # fetch paste from db
+    # fetch paste from db
+    paste = Pastes.get_paste!(id)
 
-    if paste.is_url do # paste is a url, redirect
+    # paste is a url, redirect
+    # regular paste, show content
+    if paste.is_url do
       redirect(conn, external: paste.content)
-    else # regular paste, show content
+    else
       render(conn, "show.html", paste: paste, show_edit: show_edit)
     end
   end
@@ -49,16 +52,20 @@ defmodule KetbinWeb.PageController do
 
     # attempt to create a paste
     case Pastes.create_paste(paste_params) do
-      {:ok, paste} -> # all good, redirect
+      # all good, redirect
+      {:ok, paste} ->
         unless is_url do
           conn
-          |> redirect(to: Routes.page_path(conn, :show, paste)) # is a regular paste, take to regular route
+          # is a regular paste, take to regular route
+          |> redirect(to: Routes.page_path(conn, :show, paste))
         else
           conn
-          |> redirect(to: Routes.page_path(conn, :showlink, paste)) # is a url, take to route with /v/ prefix
+          # is a url, take to route with /v/ prefix
+          |> redirect(to: Routes.page_path(conn, :showlink, paste))
         end
 
-      {:error, %Ecto.Changeset{} = changeset} -> # something went wrong, bail
+      # something went wrong, bail
+      {:error, %Ecto.Changeset{} = changeset} ->
         render(conn, "index.html", changeset: changeset)
     end
   end
@@ -72,11 +79,24 @@ defmodule KetbinWeb.PageController do
   def update(conn, %{"id" => id, "paste" => paste_params}) do
     paste = Pastes.get_paste!(id)
 
+    # check if content is a url
+    is_url =
+      Map.get(paste_params, "content")
+      |> Utils.is_url?()
+
+    paste_params = Map.put(paste_params, "is_url", is_url)
+
     case Pastes.update_paste(paste, paste_params) do
       {:ok, paste} ->
-        conn
-        |> put_flash(:info, "Paste updated successfully.")
-        |> redirect(to: Routes.page_path(conn, :show, paste))
+        unless is_url do
+          conn
+          |> put_flash(:info, "Paste updated successfully.")
+          |> redirect(to: Routes.page_path(conn, :show, paste))
+        else
+          conn
+          |> put_flash(:info, "Paste updated successfully.")
+          |> redirect(to: Routes.page_path(conn, :showlink, paste))
+        end
 
       {:error, %Ecto.Changeset{} = changeset} ->
         render(conn, "edit.html", paste: paste, changeset: changeset)
