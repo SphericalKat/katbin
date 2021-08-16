@@ -55,3 +55,5 @@ textarea {
 	color: black;
 	font-weight: bold;
 }
+
+@import './highlight.css';

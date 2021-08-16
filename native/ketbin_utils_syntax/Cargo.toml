@@ -1,7 +1,7 @@
 [package]
 name = "ketbin_utils_syntax"
 version = "0.1.0"
-authors = []
+authors = ["SphericalKat <amolele@gmail.com>"]
 edition = "2018"
 
 [lib]
@@ -11,3 +11,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 rustler = "0.22.0"
+syntect = "4.6"
