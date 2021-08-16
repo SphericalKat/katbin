@@ -1,7 +1,7 @@
 FROM elixir:alpine AS build
 
 # install build dependencies
-RUN apk add --no-cache build-base npm git curl py-pip
+RUN apk add --no-cache build-base npm git curl py-pip rust cargo
 
 # prepare build dir
 WORKDIR /app
@@ -25,6 +25,7 @@ RUN npm --prefix ./assets ci --progress=false --no-audit --loglevel=error
 COPY priv priv
 COPY assets assets
 COPY lib lib
+COPY native native
 RUN npm run --prefix ./assets deploy
 RUN mix phx.digest
 
