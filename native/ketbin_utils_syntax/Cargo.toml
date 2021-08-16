@@ -1,0 +1,13 @@
+[package]
+name = "ketbin_utils_syntax"
+version = "0.1.0"
+authors = []
+edition = "2018"
+
+[lib]
+name = "ketbin_utils_syntax"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+rustler = "0.22.0"
