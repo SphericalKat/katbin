@@ -15,7 +15,7 @@
     <header class="flex w-full justify-between items-center py-3 px-6">
      <a href="<%= Routes.page_path(@conn, :index) %>">
         <span class="font-semibold text-xl tracking-tight">
-          <span class="text-amber">&lt;Kat</span>bin/&gt;
+          <span class="text-amber text-xl">&lt;Kat</span>bin/&gt;
         </span>
       </a>
 
