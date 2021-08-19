@@ -6,16 +6,18 @@ defmodule Ketbin.Accounts.UserNotifier do
   #   * Swoosh - https://hexdocs.pm/swoosh
   #   * Bamboo - https://hexdocs.pm/bamboo
   #
-  defp deliver(to, body) do
+  defp deliver(to, body, subject) do
     require Logger
     Logger.debug(body)
 
-    new()
-    |> to(to)
-    |> from("noreply@katb.in")
-    |> subject("Password reset requested")
-    |> text_body(body)
-    |> Ketbin.Mailer.deliver()
+    Task.start(fn ->
+      new()
+      |> to(to)
+      |> from({"Katbin", "noreply@katb.in"})
+      |> subject(subject)
+      |> text_body(body)
+      |> Ketbin.Mailer.deliver()
+    end)
 
     {:ok, %{to: to, body: body}}
   end
@@ -24,59 +26,71 @@ defmodule Ketbin.Accounts.UserNotifier do
   Deliver instructions to confirm account.
   """
   def deliver_confirmation_instructions(user, url) do
-    deliver(user.email, """
+    deliver(
+      user.email,
+      """
 
-    ==============================
+      ==============================
 
-    Hi #{user.email},
+      Hi #{user.email},
 
-    You can confirm your account by visiting the URL below:
+      You can confirm your account by visiting the URL below:
 
-    #{url}
+      #{url}
 
-    If you didn't create an account with us, please ignore this.
+      If you didn't create an account with us, please ignore this.
 
-    ==============================
-    """)
+      ==============================
+      """,
+      "Account confirmation"
+    )
   end
 
   @doc """
   Deliver instructions to reset a user password.
   """
   def deliver_reset_password_instructions(user, url) do
-    deliver(user.email, """
+    deliver(
+      user.email,
+      """
 
-    ==============================
+      ==============================
 
-    Hi #{user.email},
+      Hi #{user.email},
 
-    You can reset your password by visiting the URL below:
+      You can reset your password by visiting the URL below:
 
-    #{url}
+      #{url}
 
-    If you didn't request this change, please ignore this.
+      If you didn't request this change, please ignore this.
 
-    ==============================
-    """)
+      ==============================
+      """,
+      "Password reset requested"
+    )
   end
 
   @doc """
   Deliver instructions to update a user email.
   """
   def deliver_update_email_instructions(user, url) do
-    deliver(user.email, """
+    deliver(
+      user.email,
+      """
 
-    ==============================
+      ==============================
 
-    Hi #{user.email},
+      Hi #{user.email},
 
-    You can change your email by visiting the URL below:
+      You can change your email by visiting the URL below:
 
-    #{url}
+      #{url}
 
-    If you didn't request this change, please ignore this.
+      If you didn't request this change, please ignore this.
 
-    ==============================
-    """)
+      ==============================
+      """,
+      "Email update requested"
+    )
   end
 end
