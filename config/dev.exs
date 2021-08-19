@@ -30,6 +30,32 @@ config :ketbin, KetbinWeb.Endpoint,
     ]
   ]
 
+smtp_relay =
+  System.get_env("SWOOSH_SMTP_RELAY") ||
+    raise """
+    environment variable SWOOSH_SMTP_RELAY is missing.
+    """
+username =
+  System.get_env("SWOOSH_USERNAME") ||
+    raise """
+    environment variable SWOOSH_USERNAME is missing.
+    """
+password =
+  System.get_env("SWOOSH_PASSWORD") ||
+    raise """
+    environment variable SWOOSH_PASSWORD is missing.
+    """
+
+# configure mailer
+config :ketbin, Ketbin.Mailer,
+  adapter: Swoosh.Adapters.SMTP,
+  relay: smtp_relay,
+  username: username,
+  password: password,
+  tls: :always,
+  auth: :always,
+  port: 587
+
 # ## SSL Support
 #
 # In order to use HTTPS in development, a self-signed

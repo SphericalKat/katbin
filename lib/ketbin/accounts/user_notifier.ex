@@ -1,4 +1,5 @@
 defmodule Ketbin.Accounts.UserNotifier do
+  import Swoosh.Email
   # For simplicity, this module simply logs messages to the terminal.
   # You should replace it by a proper email or notification tool, such as:
   #
@@ -8,6 +9,14 @@ defmodule Ketbin.Accounts.UserNotifier do
   defp deliver(to, body) do
     require Logger
     Logger.debug(body)
+
+    new()
+    |> to(to)
+    |> from("noreply@katb.in")
+    |> subject("Password reset requested")
+    |> text_body(body)
+    |> Ketbin.Mailer.deliver()
+
     {:ok, %{to: to, body: body}}
   end
 

@@ -35,3 +35,4 @@ npm-debug.log
 /priv/native/
 .idea
 .env
+.envrc

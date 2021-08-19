@@ -49,6 +49,9 @@ defmodule Ketbin.MixProject do
       {:phx_gen_auth, "~> 0.7", only: [:dev], runtime: false},
       {:rustler, "~> 0.22-rc"},
       {:html_sanitize_ex, "~> 1.4"},
+      {:hackney, "~> 1.17"},
+      {:swoosh, "~> 1.5"},
+      {:gen_smtp, "~> 1.1"}
     ]
   end
 
