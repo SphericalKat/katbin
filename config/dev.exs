@@ -13,10 +13,7 @@ config :ketbin, KetbinWeb.Endpoint,
   check_origin: false,
   watchers: [
     node: [
-      "node_modules/webpack/bin/webpack.js",
-      "--mode",
-      "development",
-      "--watch-stdin",
+      "build.js",
       cd: Path.expand("../assets", __DIR__)
     ]
   ]
