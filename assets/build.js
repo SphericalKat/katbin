@@ -25,6 +25,7 @@ esbuild
     outfile: "../priv/static/assets/app.js",
     minify: productionBuild,
     watch: !productionBuild,
+    external: ["*.ttf"],
     plugins: [
       postCSSPlugin({
         plugins: [postcssImport, tailwindcss, autoprefixer],
