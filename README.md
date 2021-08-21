@@ -2,6 +2,8 @@
 
 To start your Phoenix server:
 
+  * Copy `config/dev.secret.sample.exs` to `config/dev.secret.exs`
+  * Fill in the SMTP and database configuration in `config/dev.secret.exs`
   * Install dependencies with `mix deps.get`
   * Create and migrate your database with `mix ecto.setup`
   * Install Node.js dependencies with `npm install` inside the `assets` directory

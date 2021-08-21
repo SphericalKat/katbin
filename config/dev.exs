@@ -1,14 +1,5 @@
 use Mix.Config
 
-# Configure your database
-config :ketbin, Ketbin.Repo,
-  username: "postgres",
-  password: "postgres",
-  database: "ketbin_dev",
-  hostname: "localhost",
-  show_sensitive_data_on_connection_error: true,
-  pool_size: 10
-
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #
@@ -29,32 +20,6 @@ config :ketbin, KetbinWeb.Endpoint,
       cd: Path.expand("../assets", __DIR__)
     ]
   ]
-
-smtp_relay =
-  System.get_env("SWOOSH_SMTP_RELAY") ||
-    raise """
-    environment variable SWOOSH_SMTP_RELAY is missing.
-    """
-username =
-  System.get_env("SWOOSH_USERNAME") ||
-    raise """
-    environment variable SWOOSH_USERNAME is missing.
-    """
-password =
-  System.get_env("SWOOSH_PASSWORD") ||
-    raise """
-    environment variable SWOOSH_PASSWORD is missing.
-    """
-
-# configure mailer
-config :ketbin, Ketbin.Mailer,
-  adapter: Swoosh.Adapters.SMTP,
-  relay: smtp_relay,
-  username: username,
-  password: password,
-  tls: :always,
-  auth: :always,
-  port: 587
 
 # ## SSL Support
 #
@@ -100,3 +65,6 @@ config :phoenix, :stacktrace_depth, 20
 
 # Initialize plugs at runtime for faster development compilation
 config :phoenix, :plug_init_mode, :runtime
+
+# Import the secrets config
+import_config "dev.secret.exs"

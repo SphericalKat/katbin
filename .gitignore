@@ -36,3 +36,6 @@ npm-debug.log
 .idea
 .env
 .envrc
+
+# Secret config files
+config/*.secret.exs
