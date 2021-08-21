@@ -2,6 +2,7 @@
 @import "tailwindcss/base";
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
+@import "./highlight.css";
 
 @font-face {
   font-family: "JetBrains Mono";
@@ -62,5 +63,3 @@ textarea {
   color: black;
   font-weight: bold;
 }
-
-@import "./highlight.css";
