@@ -3,29 +3,20 @@
   "description": " ",
   "license": "MIT",
   "scripts": {
-    "deploy": "NODE_ENV=production webpack --mode production",
-    "watch": "webpack --mode development --watch"
+    "deploy": "NODE_ENV=production node build.js",
+    "watch": "node build.js"
   },
   "dependencies": {
     "phoenix": "file:../deps/phoenix",
     "phoenix_html": "file:../deps/phoenix_html"
   },
   "devDependencies": {
-    "@babel/core": "^7.0.0",
-    "@babel/preset-env": "^7.0.0",
     "autoprefixer": "^10.3.1",
-    "babel-loader": "^8.0.0",
-    "copy-webpack-plugin": "^5.1.1",
-    "css-loader": "^3.4.2",
-    "hard-source-webpack-plugin": "^0.13.1",
-    "mini-css-extract-plugin": "^0.9.0",
-    "optimize-css-assets-webpack-plugin": "^5.0.1",
+    "esbuild": "^0.12.22",
+    "esbuild-plugin-postcss2": "0.0.9",
+    "fs-extra": "^10.0.0",
     "postcss": "^8.3.6",
     "postcss-import": "^14.0.2",
-    "postcss-loader": "^4.2.0",
-    "tailwindcss": "^2.2.7",
-    "terser-webpack-plugin": "^2.3.2",
-    "webpack": "^4.41.5",
-    "webpack-cli": "^3.3.2"
+    "tailwindcss": "^2.2.7"
   }
 }

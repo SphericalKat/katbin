@@ -2,12 +2,20 @@
 @import "tailwindcss/base";
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
+@import "./highlight.css";
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url(/fonts/jetbrains_mono_variable.ttf);
+  font-weight: 100 1000;
+  font-stretch: 25% 151%;
+}
 
 * {
   font-family: "JetBrains Mono", monospace;
   color: white;
-	font-size: 14px;
-	font-weight: bold;
+  font-size: 14px;
+  font-weight: bold;
 }
 
 html,
@@ -17,7 +25,7 @@ body {
 }
 
 a:hover {
-  color: #ff9800
+  color: #ff9800;
 }
 
 header {
@@ -29,31 +37,29 @@ code {
 }
 
 code {
-	white-space: pre;
-	font-size: 14px;
-	font-weight: bold;
+  white-space: pre;
+  font-size: 14px;
+  font-weight: bold;
 }
 
 textarea {
-	font-size: 14px;
-	font-weight: bold;
+  font-size: 14px;
+  font-weight: bold;
 }
 
 .alert {
-	width: 100%;
-	text-align: center;
+  width: 100%;
+  text-align: center;
 }
 
 .alert-info {
-	background-color: #1ed98e;
-	color: black;
-	font-weight: bold;
+  background-color: #1ed98e;
+  color: black;
+  font-weight: bold;
 }
 
 .alert-danger {
-	background-color: #ff9800;
-	color: black;
-	font-weight: bold;
+  background-color: #ff9800;
+  color: black;
+  font-weight: bold;
 }
-
-@import './highlight.css';
