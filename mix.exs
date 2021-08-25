@@ -51,7 +51,8 @@ defmodule Ketbin.MixProject do
       {:html_sanitize_ex, "~> 1.4"},
       {:hackney, "~> 1.17"},
       {:swoosh, "~> 1.5"},
-      {:gen_smtp, "~> 1.1"}
+      {:gen_smtp, "~> 1.1"},
+      {:earmark, "~> 1.4"}
     ]
   end
 

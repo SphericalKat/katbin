@@ -1,0 +1,167 @@
+.markdown p {
+  font-family: sans-serif;
+  font-weight: 400;
+}
+
+.markdown p > * {
+  font-family: sans-serif;
+  font-weight: 400;
+}
+
+.markdown h1,
+h2,
+h3 {
+  margin-top: 20px;
+  margin-bottom: 10px;
+}
+
+.markdown h1 {
+  font-size: 2em;
+  @apply text-amber;
+}
+
+.markdown h2 {
+  font-size: 1.5em;
+  @apply text-amber;
+}
+
+.markdown h3 {
+  font-size: 1.17em;
+  @apply text-amber;
+}
+
+.markdown h4 {
+  font-size: 1em;
+  @apply text-amber;
+  margin-bottom: 10px;
+}
+
+.markdown h5 {
+  font-size: 0.83em;
+  @apply text-amber;
+  margin-bottom: 10px;
+}
+
+.markdown h6 {
+  font-size: 0.75em;
+  @apply text-amber;
+  margin-bottom: 10px;
+}
+
+.markdown blockquote {
+  padding: 0 1em;
+  margin: 0 0 20px;
+  font-size: 17.5px;
+  border-left: 4px solid #8b949e;
+}
+
+.markdown img {
+  max-width: 35%;
+  vertical-align: middle;
+  display: inline;
+}
+
+.markdown table {
+  width: 100%;
+  max-width: 100%;
+  margin-bottom: 20px;
+  margin-top: 10px;
+}
+tbody > tr:nth-child(odd) > td,
+.table-striped > tbody > tr:nth-child(odd) > th {
+  background-color: #1b1b1b;
+}
+.table-striped > tbody > tr:nth-child(odd) > td,
+.table-striped > tbody > tr:nth-child(odd) > th {
+  background-color: #1b1b1b;
+}
+table > thead > tr > th,
+table > tbody > tr > th,
+table > tfoot > tr > th,
+table > thead > tr > td,
+table > tbody > tr > td,
+table > tfoot > tr > td {
+  padding: 8px;
+  line-height: 1.42857143;
+  vertical-align: top;
+  border: 1px solid #3b434b;
+}
+
+.markdown hr {
+  margin-top: 20px;
+  margin-bottom: 20px;
+  border: 0;
+  border-top: 1px solid #3b434b;
+}
+
+.markdown {
+  /* border: 1px solid #3b434b; */
+  border-radius: 6px;
+  padding-right: 32px;
+  padding-left: 32px;
+}
+
+.markdown pre {
+  padding: 12px;
+  overflow: auto;
+  font-size: 85%;
+  line-height: 1.45;
+  background-color: #1b1b1b;
+  border-radius: 6px;
+  margin: 10px 0;
+}
+
+.markdown code pre tt {
+  font-family: "JetbrainsMono", SFMono-Regular, Consolas, Liberation Mono, Menlo,
+    monospace;
+}
+
+.markdown blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown blockquote,
+.markdown p,
+.markdown ol,
+.markdown pre,
+.markdown table,
+.markdown ul {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+h1,
+h2 {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid #3b434b;
+}
+
+.markdown li {
+  display: list-item;
+  text-align: -webkit-match-parent;
+  font-family: sans-serif;
+  font-weight: 400;
+}
+
+.markdown ol {
+  list-style-type: decimal;
+}
+
+.markdown ol,
+ul {
+  padding: 0;
+  margin-left: 40px;
+}
+
+.markdown strong {
+  font-family: sans-serif;
+}
+
+.markdown code.inline {
+  font-family: "JetBrains Mono", monospace;
+  background-color: rgb(240 246 252 / 15%);
+  border-radius: 6px;
+  font-size: 85%;
+  margin: 0;
+  padding: 0.2em 0.4em;
+}
