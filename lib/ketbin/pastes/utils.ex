@@ -25,4 +25,11 @@ defmodule Ketbin.Pastes.Utils do
       FunctionClauseError -> false
     end
   end
+
+  def is_valid_name?(name) do
+    case name do
+      x when x in ["pastes", "users"] -> false
+      _ -> Regex.match?(~r/^[a-zA-Z0-9_]*$/, name)
+    end
+  end
 end

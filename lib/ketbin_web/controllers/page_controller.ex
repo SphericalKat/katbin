@@ -73,6 +73,46 @@ defmodule KetbinWeb.PageController do
     end
   end
 
+  def create_custom(%{assigns: %{current_user: current_user}} = conn, %{"paste" => paste_params}) do
+    # Get ID from params
+    id = Map.get(paste_params, "id")
+
+    # todo: put_flash and preserve paste content
+    if not Utils.is_valid_name?(id) do
+
+    end
+
+    # check if content is a url
+    is_url =
+      Map.get(paste_params, "content")
+      |> Utils.is_url?()
+
+    # put id and is_url values into changeset
+    paste_params =
+      Map.put(paste_params, "id", id)
+      |> Map.put("is_url", is_url)
+      |> Map.put("belongs_to", current_user && current_user.id)
+
+    # attempt to create a paste
+    case Pastes.create_paste(paste_params) do
+      # all good, redirect
+      {:ok, paste} ->
+        unless is_url do
+          conn
+          # is a regular paste, take to regular route
+          |> redirect(to: Routes.page_path(conn, :show, paste))
+        else
+          conn
+          # is a url, take to route with /v/ prefix
+          |> redirect(to: Routes.page_path(conn, :showlink, paste))
+        end
+
+      # something went wrong, bail
+      {:error, %Ecto.Changeset{} = changeset} ->
+        render(conn, "index.html", changeset: changeset)
+    end
+  end
+
   def edit(conn, %{"id" => id}) do
     paste = Pastes.get_paste!(id)
     changeset = Pastes.change_paste(paste)
