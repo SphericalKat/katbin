@@ -25,7 +25,7 @@ Fill in this new file with the required environment variables.
 
 ## Using the official docker image
 ```sh
-docker un --env-file .env atechnohazard/katbin-elixir
+docker run --env-file .env atechnohazard/katbin-elixir
 ```
 
 ## Building the docker image
