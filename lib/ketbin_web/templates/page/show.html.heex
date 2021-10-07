@@ -9,8 +9,8 @@
 		<% end %>
 	</div>
 	<%= if @extension == "md" do%>
-		<div class="break-word px-6 py-4 h-full w-full markdown overflow-y-auto"><%= raw Earmark.as_html!(@paste.content, escape: true, gfm_tables: true) |> HtmlSanitizeEx.html5 %></div>
+		<div class="break-word px-6 py-4 h-full w-full markdown overflow-y-auto"><%= raw Earmark.as_html!(@paste.content, escape: true, gfm_tables: true) |> HtmlSanitizeEx.markdown_html %></div>
 	<% else %>
-		<code class="break-word px-6 py-4 h-full w-full overflow-y-auto"><%= raw Ketbin.Utils.Syntax.highlight_text(@paste.content, @extension) |> HtmlSanitizeEx.html5 %></code>
+		<code class="break-word px-6 py-4 h-full w-full overflow-y-auto"><%= raw Ketbin.Utils.Syntax.highlight_text(@paste.content, @extension) |> HtmlSanitizeEx.strip_tags %></code>
 	<% end %>
 </div>
