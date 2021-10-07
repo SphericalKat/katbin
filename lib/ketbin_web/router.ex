@@ -96,6 +96,5 @@ defmodule KetbinWeb.Router do
     post "/users/confirm", UserConfirmationController, :create
     get "/users/confirm/:token", UserConfirmationController, :confirm
 
-    resources "/pastes", PasteController
   end
 end
