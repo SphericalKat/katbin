@@ -1,4 +1,12 @@
-<%= form_for @changeset, @action, [class: "flex flex-col w-full h-full relative"], fn f -> %>
+<%= form_for @changeset, @action, [class: "flex flex-col w-full h-full relative", id: "page_form"], fn f -> %>
+		<script>
+			document.addEventListener("keydown", function(e) {
+				if ((window.navigator.platform.match("Mac") ? e.metaKey : e.ctrlKey) && e.keyCode == 83) {
+					e.preventDefault();
+					document.getElementById("page_form").submit()
+				}
+			}, false);
+		</script>
     <%= if @changeset.action do %>
         <div class="w-full text-center bg-amber">
             <p>Oops, something went wrong!</p>
