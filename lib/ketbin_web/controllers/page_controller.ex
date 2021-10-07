@@ -23,14 +23,23 @@ defmodule KetbinWeb.PageController do
     if paste.is_url do
       redirect(conn, external: paste.content)
     else
-      render(conn, "show.html", paste: paste, show_edit: show_edit, extension: List.first(tail) || "")
+      render(conn, "show.html",
+        paste: paste,
+        show_edit: show_edit,
+        extension: List.first(tail) || ""
+      )
     end
   end
 
   def showlink(%{assigns: %{show_edit: show_edit}} = conn, %{"id" => id}) do
     [head | tail] = String.split(id, ".")
     paste = Pastes.get_paste!(head)
-    render(conn, "show.html", paste: paste, show_edit: show_edit, extension: (if tail == [], do: "", else: tail))
+
+    render(conn, "show.html",
+      paste: paste,
+      show_edit: show_edit,
+      extension: if(tail == [], do: "", else: tail)
+    )
   end
 
   def raw(conn, %{"id" => id}) do

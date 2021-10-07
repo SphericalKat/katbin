@@ -46,6 +46,7 @@ defmodule KetbinWeb.UserSettingsController do
         |> UserAuth.log_in_user(user)
 
         conn
+
       {:error, changeset} ->
         render(conn, "edit.html", password_changeset: changeset)
     end

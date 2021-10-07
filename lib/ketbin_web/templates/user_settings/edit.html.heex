@@ -1,4 +1,4 @@
-	<h1 class="font-bold text-4xl text-amber pt-4 w-full text-center">Settings</h1>
+<h1 class="font-bold text-4xl text-amber pt-4 w-full text-center">Settings</h1>
 
 <div class="flex w-full h-full justify-center items-center">
 <%= form_for @email_changeset, Routes.user_settings_path(@conn, :update), [class: "flex flex-col h-full justify-center items-start m-auto"], fn f -> %>
@@ -63,4 +63,4 @@
 			<%= submit "Change password" %>
 		</div>
 	<% end %>
-<div>
+</div>

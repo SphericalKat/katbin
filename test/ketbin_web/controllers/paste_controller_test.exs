@@ -75,6 +75,7 @@ defmodule KetbinWeb.PasteControllerTest do
     test "deletes chosen paste", %{conn: conn, paste: paste} do
       conn = delete(conn, Routes.paste_path(conn, :delete, paste))
       assert redirected_to(conn) == Routes.paste_path(conn, :index)
+
       assert_error_sent 404, fn ->
         get(conn, Routes.paste_path(conn, :show, paste))
       end
