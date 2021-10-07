@@ -13,7 +13,7 @@ fs.copySync("static/", "../priv/static/");
 console.log("[build.js] [info] Copying static files from static/");
 
 if (!productionBuild) {
-  console.log("[build.js] [info] Starting to watching assets for changes");
+  console.log("[build.js] [info] Starting to watch assets for changes");
 } else {
   console.log("[build.js] [info] Building assets in production mode");
 }
