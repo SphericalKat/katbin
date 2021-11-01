@@ -21,7 +21,9 @@ defmodule KetbinWeb.PageController do
     # paste is a url, redirect
     # regular paste, show content
     if paste.is_url do
-      redirect(conn, external: paste.content)
+      redirect(conn,
+        external: paste.content |> String.replace("\r", "") |> String.replace("\n", "")
+      )
     else
       render(conn, "show.html",
         paste: paste,
