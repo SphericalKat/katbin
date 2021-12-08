@@ -1,4 +1,4 @@
-# Ketbin
+# Katbin
 
 To start your Phoenix server:
 
