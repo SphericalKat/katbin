@@ -28,7 +28,8 @@ defmodule KetbinWeb.PageController do
       render(conn, "show.html",
         paste: paste,
         show_edit: show_edit,
-        extension: List.first(tail) || ""
+        extension: List.first(tail) || "",
+        page_title: paste.id
       )
     end
   end
