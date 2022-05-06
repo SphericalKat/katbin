@@ -17,7 +17,7 @@ config :ketbin, Ketbin.Repo,
   url: database_url,
   pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
   cacertfile: "priv/cert.pem"
-
+  PGPASSWORD=b7gjdl5bwx8e5gf5 pg_dump -U doadmin -W -F p postgres -h db-katbin-do-user-3351914-0.b.db.ondigitalocean.com -p 25060 > katbin.sql
 secret_key_base =
   System.get_env("SECRET_KEY_BASE") ||
     raise """
