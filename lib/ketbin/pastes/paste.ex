@@ -1,6 +1,7 @@
 defmodule Ketbin.Pastes.Paste do
   use Ecto.Schema
   import Ecto.Changeset
+  @derive {Jason.Encoder, only: [:content, :is_url, :belongs_to]}
 
   @primary_key {:id, :string, autogenerate: false}
   @derive {Phoenix.Param, key: :id}

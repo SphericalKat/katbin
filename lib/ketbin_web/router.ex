@@ -14,6 +14,8 @@ defmodule KetbinWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+    plug :fetch_session
+    plug :fetch_current_user
   end
 
   scope "/", KetbinWeb do
@@ -40,6 +42,12 @@ defmodule KetbinWeb.Router do
     get "/edit/:id", PageController, :edit
     patch "/:id", PageController, :update
     put "/:id", PageController, :update
+  end
+
+  scope "/api", KetbinWeb.Api, as: :api do
+    pipe_through :api
+
+    resources "/paste", PasteController, only: [:show, :index, :create]
   end
 
   # Other scopes may use custom stacks.
