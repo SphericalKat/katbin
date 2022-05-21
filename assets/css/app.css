@@ -6,107 +6,123 @@
 @import "./markdown.css";
 
 @font-face {
-  font-family: "JetBrains Mono";
-  src: url(/fonts/jetbrains_mono_variable.ttf);
-  font-weight: 100 1000;
-  font-stretch: 25% 151%;
+    font-family: "JetBrains Mono";
+    src: url(/fonts/jetbrains_mono_variable.ttf);
+    font-weight: 100 1000;
+    font-stretch: 25% 151%;
 }
 
 * {
-  font-family: "JetBrains Mono", monospace;
-  color: white;
-  font-size: 14px;
-  font-weight: bold;
+    font-family: "JetBrains Mono", monospace;
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
 }
 
 @layer base {
-  h1 {
-    font-size: 2em;
-    font-weight: bold;
-  }
-  h2 {
-    font-size: 1.5em;
-    font-weight: bold;
-  }
-  h3 {
-    font-size: 1.17em;
-    font-weight: bold;
-  }
-  h4 {
-    font-weight: bold;
-  }
-  h5 {
-    font-size: 0.83em;
-    font-weight: bold;
-  }
-  h6 {
-    font-size: 0.67em;
-    font-weight: bold;
-  } 
-  h1, h2, h3 {
-    margin-top: 20px;
-    margin-bottom:10px
-  }
-  img {
-    display: inline;
-  }
+    h1 {
+        font-size: 2em;
+        font-weight: bold;
+    }
+
+    h2 {
+        font-size: 1.5em;
+        font-weight: bold;
+    }
+
+    h3 {
+        font-size: 1.17em;
+        font-weight: bold;
+    }
+
+    h4 {
+        font-weight: bold;
+    }
+
+    h5 {
+        font-size: 0.83em;
+        font-weight: bold;
+    }
+
+    h6 {
+        font-size: 0.67em;
+        font-weight: bold;
+    }
+
+    h1,
+    h2,
+    h3 {
+        margin-top: 20px;
+        margin-bottom: 10px
+    }
+
+    img {
+        display: inline;
+    }
 }
 
 html,
 body {
-  width: 100%;
-  height: 100%;
+    width: 100%;
+    height: 100%;
+}
+
+a {
+    color: #ff9800;
 }
 
 a:hover {
-  color: #ff9800;
+    color: #ff9800;
+    text-decoration: underline;
 }
 
 header {
-  background-color: #1a1a1a;
+    background-color: #1a1a1a;
 }
 
 code {
-  font-family: "JetBrains Mono", monospace;
+    font-family: "JetBrains Mono", monospace;
 }
 
 code {
-  white-space: pre;
-  font-size: 14px;
-  font-weight: bold;
+    white-space: pre;
+    font-size: 14px;
+    font-weight: bold;
 }
 
 textarea {
-  font-size: 14px;
-  font-weight: bold;
+    font-size: 14px;
+    font-weight: bold;
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+    width: 8px;
+    height: 8px;
 }
+
 ::-webkit-scrollbar-corner,
 ::-webkit-scrollbar-track {
-  background: transparent;
+    background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
-  border-radius: 8px;
-  @apply bg-amber;
+    border-radius: 8px;
+    @apply bg-amber;
 }
 
 .alert {
-  width: 100%;
-  text-align: center;
+    width: 100%;
+    text-align: center;
 }
 
 .alert-info {
-  background-color: #1ed98e;
-  color: black;
-  font-weight: bold;
+    background-color: #1ed98e;
+    color: black;
+    font-weight: bold;
 }
 
 .alert-danger {
-  background-color: #ff9800;
-  color: black;
-  font-weight: bold;
+    background-color: #ff9800;
+    color: black;
+    font-weight: bold;
 }

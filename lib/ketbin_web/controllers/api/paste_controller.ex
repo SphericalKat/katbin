@@ -2,7 +2,6 @@ defmodule KetbinWeb.Api.PasteController do
   use KetbinWeb, :controller
 
   alias Ketbin.Pastes
-  alias Ketbin.Pastes.Paste
   alias Ketbin.Pastes.Utils
 
   def show(conn, %{"id" => id}) do

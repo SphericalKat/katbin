@@ -37,7 +37,7 @@ defmodule KetbinWeb.PageController do
     [head | tail] = String.split(id, ".")
     paste = Pastes.get_paste!(head)
 
-    render(conn, "show.html",
+    render(conn, "shorten.html",
       paste: paste,
       show_edit: show_edit,
       extension: if(tail == [], do: "", else: tail)
