@@ -13,9 +13,20 @@
         </div>
     <% end %>
 
+    <%= if assigns[:already_taken] do %>
+        <div class="w-full text-center bg-amber">
+            <p>This custom URL has already been taken.</p>
+        </div>
+    <% end %>
+
     <div class="w-full h-full">
         <%= textarea f, :content, [class: "w-full h-full px-6 py-4 outline-none bg-light-grey font-bold resize-none", placeholder: "> Paste, save, share! (Pasting just a URL will shorten it!)"] %>
         <div class="flex absolute top-0 right-0 p-4">
+            <%= if @current_user && !assigns[:is_edit] do %>
+            <div>
+                <%= text_input f, :custom_url, [class: "px-2 mr-2 outline-none text-black px-2 py-1", placeholder: "Custom URL"]  %>
+            </div>
+            <% end %>
             <button type="submit">
                 <svg
 									class="h-6 w-6 cursor-pointer fill-current text-white hover:text-amber"

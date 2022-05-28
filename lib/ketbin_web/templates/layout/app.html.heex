@@ -9,6 +9,55 @@
     <% else %>
       <title>Katbin</title>
     <% end %>
+    <title itemprop="name">Katbin</title>
+
+    <meta property="og:type" content="object">
+    <meta property="og:title" content="Katbin">
+    <meta property="og:image" content="/favicon.ico">
+
+    <meta name="twitter:title" content="Katbin">
+    <meta itemprop="name" content="Katbin">
+    <meta name="application-name" content="Katbin">
+    <meta property="og:site_name" content="Katbin">
+    <meta name="theme-color" content="#1a1a1a">
+    <meta property="og:locale" content="en">
+    <meta name="language" content="en">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:site" content="@Spherical_Kat">
+    <meta name="twitter:image" content="/favicon.ico">
+
+    <meta name="robots" content="index,follow">
+    <meta name="googlebot" content="index,follow">
+    <meta name="keywords" content="paste,pastebin,url,urlshortener,url-shortener,code,programming,bin,cat,kat,paste,share,save,login">
+    <meta name="coverage" content="Worldwide">
+    <meta name="distribution" content="Global">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="apple-mobile-web-app-title" content="Katbin">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-touch-fullscreen" content="yes">
+
+    <%= if assigns[:paste] do %>
+        <meta name="description" content={@paste.content}>
+        <meta itemprop="description" content={@paste.content}>
+        <meta property="og:description" content={@paste.content}>
+        <meta name="twitter:description" content={@paste.content}>
+
+        <meta name="url" content={"https://katb.in/#{@paste.id}"}>
+        <meta name="twitter:url" content={"https://katb.in/#{@paste.id}"}>
+        <meta property="og:url" content={"https://katb.in/#{@paste.id}"}>
+    <% else %>
+        <meta name="description" content="Paste, save, share! A pastebin and URL shortener for all your needs.">
+        <meta property="og:description" content="Paste, save, share! A pastebin and URL shortener for all your needs.">
+        <meta itemprop="og:description" content="Paste, save, share! A pastebin and URL shortener for all your needs.">
+        <meta name="twitter:description" content="Paste, save, share! A pastebin and URL shortener for all your needs.">
+
+        <meta name="url" content="https://katb.in">
+        <meta name="twitter:url" content="https://katb.in">
+        <meta property="og:url" content="https://katb.in">
+    <% end %>
+
     <link rel="stylesheet" href={ Routes.static_path(@conn, "/assets/app.css") }/>
     <script defer type="text/javascript" src={ Routes.static_path(@conn, "/assets/app.js") }></script>
   </head>

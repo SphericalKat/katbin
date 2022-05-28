@@ -12,12 +12,12 @@ database_url =
     """
 
 config :ketbin, Ketbin.Repo,
-  ssl: true,
-  verify: :verify_peer,
+  ssl: false,
+  # verify: :verify_peer,
+  socket_options: [:inet6],
   url: database_url,
-  pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
-  cacertfile: "priv/cert.pem"
-
+  pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
+  # cacertfile: "priv/cert.pem"
 secret_key_base =
   System.get_env("SECRET_KEY_BASE") ||
     raise """
