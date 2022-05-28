@@ -28,7 +28,8 @@ defmodule KetbinWeb.PageController do
       render(conn, "show.html",
         paste: paste,
         show_edit: show_edit,
-        extension: List.first(tail) || ""
+        extension: List.first(tail) || "",
+        page_title: paste.id
       )
     end
   end
@@ -40,7 +41,8 @@ defmodule KetbinWeb.PageController do
     render(conn, "shorten.html",
       paste: paste,
       show_edit: show_edit,
-      extension: if(tail == [], do: "", else: tail)
+      extension: if(tail == [], do: "", else: tail),
+      page_title: paste.id
     )
   end
 
