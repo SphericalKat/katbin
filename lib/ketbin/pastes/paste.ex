@@ -16,5 +16,6 @@ defmodule Ketbin.Pastes.Paste do
     paste
     |> cast(attrs, [:is_url, :content, :id, :belongs_to])
     |> validate_required([:is_url, :content])
+    |> unique_constraint(:id, name: :pastes_pkey)
   end
 end

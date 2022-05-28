@@ -50,8 +50,12 @@ defmodule KetbinWeb.PageController do
   end
 
   def create(%{assigns: %{current_user: current_user}} = conn, %{"paste" => paste_params}) do
-    # generate phonetic key
-    id = Utils.generate_key()
+    # if custom url exists, use it as id, else generate phonetic id
+    id =
+      case Map.get(paste_params, "custom_url", "") do
+        custom_url when custom_url != "" -> custom_url
+        _ -> Utils.generate_key()
+      end
 
     # check if content is a url
     is_url =
@@ -80,7 +84,13 @@ defmodule KetbinWeb.PageController do
 
       # something went wrong, bail
       {:error, %Ecto.Changeset{} = changeset} ->
-        render(conn, "index.html", changeset: changeset)
+        case changeset.errors[:id] do
+          {"has already been taken", _} ->
+            render(conn, "index.html", changeset: changeset, already_taken: true)
+
+          _ ->
+            render(conn, "index.html", changeset: changeset)
+        end
     end
   end
 

@@ -1,1 +1,1 @@
-<%= render "form.html", Map.put(assigns, :action, Routes.page_path(@conn, :update, @paste)) %>
+<%= render "form.html", Map.put(assigns, :action, Routes.page_path(@conn, :update, @paste)) |> Map.put(:is_edit, true) %>
