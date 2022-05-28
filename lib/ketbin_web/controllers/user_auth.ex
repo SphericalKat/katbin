@@ -98,7 +98,15 @@ defmodule KetbinWeb.UserAuth do
 
   def owns_paste(%{params: %{"id" => id}, assigns: %{current_user: user}} = conn, _params) do
     [head | _tail] = String.split(id, ".")
-    paste = Pastes.get_paste!(head)
+
+    paste =
+      try do
+        Pastes.get_paste!(head)
+      rescue
+        Ecto.NoResultsError ->
+          Pastes.get_paste!(id)
+      end
+
     assign(conn, :show_edit, (user && user.id == paste.belongs_to) || false)
   end
 

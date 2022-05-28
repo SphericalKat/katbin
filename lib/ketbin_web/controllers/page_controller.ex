@@ -16,7 +16,13 @@ defmodule KetbinWeb.PageController do
     [head | tail] = String.split(id, ".")
 
     # fetch paste from db
-    paste = Pastes.get_paste!(head)
+    paste =
+      try do
+        Pastes.get_paste!(head)
+      rescue
+        Ecto.NoResultsError ->
+          Pastes.get_paste!(id)
+      end
 
     # paste is a url, redirect
     # regular paste, show content
