@@ -34,7 +34,7 @@ RUN mix phx.digest
 RUN mix do compile, release
 
 # prepare release image
-FROM alpine:3.9 AS app
+FROM alpine:3.17 AS app
 RUN apk add --no-cache openssl ncurses-libs libstdc++
 
 WORKDIR /app
