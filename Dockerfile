@@ -1,4 +1,4 @@
-FROM elixir:alpine AS build
+FROM elixir:24-alpine AS build
 
 # install build dependencies
 RUN apk add --no-cache build-base npm git curl py-pip rust cargo
