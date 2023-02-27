@@ -1,4 +1,4 @@
-FROM elixir:1.12-alpine AS build
+FROM elixir AS build
 
 # install build dependencies
 RUN apk add --no-cache build-base npm git curl py-pip rust cargo
@@ -34,7 +34,7 @@ RUN mix phx.digest
 RUN mix do compile, release
 
 # prepare release image
-FROM alpine:3.9 AS app
+FROM alpine AS app
 RUN apk add --no-cache openssl ncurses-libs libstdc++
 
 WORKDIR /app
