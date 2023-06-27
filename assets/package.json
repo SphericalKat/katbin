@@ -16,7 +16,7 @@
     "esbuild-plugin-postcss2": "0.0.9",
     "fs-extra": "^10.0.0",
     "postcss": "^8.3.6",
-    "postcss-import": "^14.0.2",
+    "postcss-import": "^15.0.0",
     "tailwindcss": "^2.2.7"
   }
 }
