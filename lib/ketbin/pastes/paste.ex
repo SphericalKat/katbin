@@ -9,6 +9,8 @@ defmodule Ketbin.Pastes.Paste do
     field :content, :string
     field :is_url, :boolean, default: false
     field :belongs_to, :id
+
+    timestamps()
   end
 
   @doc false
