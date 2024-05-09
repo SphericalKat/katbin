@@ -1,19 +1,19 @@
 module.exports = {
-  purge: [
+  content: [
     "../lib/**/*.ex",
     "../lib/**/*.leex",
     "../lib/**/*.eex",
     "../lib/**/*.heex",
     "./js/**/*.js",
   ],
-  darkMode: false, // or 'media' or 'class'
+  darkMode: 'media', // or 'media' or 'class'
   theme: {
     extend: {
-			colors: {
-        amber: '#ff9800',
-				'light-grey': '#212121',
+      colors: {
+        amber: "#ff9800",
+        "light-grey": "#212121",
       },
-		},
+    },
   },
   variants: {
     extend: {},
