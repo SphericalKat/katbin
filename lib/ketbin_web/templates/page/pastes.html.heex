@@ -1,0 +1,11 @@
+<div class="flex relative flex-col w-full h-full">
+    <ul class="break-word py-4 h-full w-full overflow-y-auto">
+        <%= for paste <- @pastes do %>
+            <li class="flex flex-row items-center justify-between">
+                <a href={ Routes.page_path(@conn, :show, paste) } class="">
+https://katb.in/v/<%= paste.id %>
+                </a>
+            </li>    
+        <% end %>
+    </ul>
+</div>

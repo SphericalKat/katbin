@@ -18,6 +18,13 @@ defmodule KetbinWeb.Router do
     plug :fetch_current_user
   end
 
+  # scope to ensure user is authenticated
+  scope "/", KetbinWeb do
+    pipe_through [:browser, :require_authenticated_user]
+
+    get "/pastes", PageController, :pastes
+  end
+
   scope "/", KetbinWeb do
     pipe_through :browser
 

@@ -134,4 +134,9 @@ defmodule KetbinWeb.PageController do
         render(conn, "edit.html", paste: paste, changeset: changeset)
     end
   end
+
+  def pastes(%{assigns: %{current_user: current_user}} = conn, _params) do
+    pastes = Pastes.list_pastes_by_user(current_user.id)
+    render(conn, "pastes.html", pastes: pastes)
+  end
 end

@@ -21,6 +21,10 @@ defmodule Ketbin.Pastes do
     Repo.all(Paste)
   end
 
+  def list_pastes_by_user(user_id) do
+    Repo.all(from(p in Paste, where: p.belongs_to == ^user_id))
+  end
+
   @doc """
   Gets a single paste.
 
