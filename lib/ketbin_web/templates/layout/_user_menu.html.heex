@@ -1,8 +1,27 @@
+<script>
+function toggleDropdown() {
+    const dropdown = document.querySelector('#dropdown');
+    const dropdownLabel = document.querySelector('#dropdown-label');
+    if (dropdown.classList.contains('hidden')) {
+        dropdown.classList.remove('hidden');
+        dropdown.classList.add('absolute');
+        dropdownLabel.innerHTML = dropdownLabel.innerHTML.replace('▼', '▲');
+    } else {
+        dropdown.classList.add('hidden');
+        dropdown.classList.remove('absolute');
+        dropdownLabel.innerHTML = dropdownLabel.innerHTML.replace('▲', '▼');
+    }
+}
+</script>
 <ul>
 	<%= if @current_user do %>
-		<li><%= @current_user.email %></li>
-		<li><%= link "Settings", to: Routes.user_settings_path(@conn, :edit) %></li>
-		<li><%= link "Log out", to: Routes.user_session_path(@conn, :delete), method: :delete %></li>
+		<div class="relative">
+            <li id="dropdown-label" onclick="toggleDropdown()" class="text-[#ff9800] cursor-pointer select-none"><%= @current_user.email %> ▼</li>
+            <div id="dropdown" class="hidden right-0 z-50 bg-[#313131] px-4 py-2">
+                <li><%= link "Settings", to: Routes.user_settings_path(@conn, :edit) %></li>
+                <li><%= link "Log out", to: Routes.user_session_path(@conn, :delete), method: :delete %></li>
+            </div>
+        </div>
 	<% else %>
 		<li><%= link "Register", to: Routes.user_registration_path(@conn, :new) %></li>
 		<li><%= link "Log in", to: Routes.user_session_path(@conn, :new) %></li>
