@@ -48,7 +48,7 @@ defmodule Ketbin.MixProject do
       {:jason, "~> 1.2"},
       {:plug_cowboy, "~> 2.5"},
       {:cors_plug, "~> 3.0"},
-      {:rustler, "~> 0.25"},
+      {:rustler, "~> 0.35"},
       {:html_sanitize_ex, "~> 1.4"},
       {:hackney, "~> 1.17"},
       {:swoosh, "~> 1.5"},
