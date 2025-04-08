@@ -42,9 +42,9 @@ config :ketbin, Ketbin.Repo,
   username: db_username,
   password: db_password,
   hostname: db_host,
-  port: db_port,
+  port: String.to_integer(db_port),
   # verify: :verify_peer,
-  socket_options: [:inet6],
+  socket_options: [:inet],
   pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
   # cacertfile: "priv/cert.pem"
 secret_key_base =
