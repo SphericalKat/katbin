@@ -49,11 +49,12 @@ defmodule Ketbin.MixProject do
       {:plug_cowboy, "~> 2.5"},
       {:cors_plug, "~> 3.0"},
       {:rustler, "~> 0.25"},
-      {:html_sanitize_ex, "~> 1.4"},
+      {:html_sanitize_ex, "~> 1.4.3"},
       {:hackney, "~> 1.17"},
       {:swoosh, "~> 1.5"},
       {:gen_smtp, "~> 1.1"},
-      {:earmark, "~> 1.4"}
+      {:earmark, "~> 1.4"},
+      {:mochiweb, "~> 3.1"}
     ]
   end
 
