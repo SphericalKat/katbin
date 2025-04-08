@@ -11,11 +11,47 @@ database_url =
     For example: ecto://USER:PASS@HOST/DATABASE
     """
 
+db_host =
+  System.get_env("DB_HOST") ||
+    raise """
+    environment variable DB_HOST is missing.
+    """
+
+db_port =
+  System.get_env("DB_PORT") ||
+    raise """
+    environment variable DB_PORT is missing.
+    """
+
+db_username =
+  System.get_env("DB_USERNAME") ||
+    raise """
+    environment variable DB_USERNAME is missing.
+    """
+
+db_password =
+  System.get_env("DB_PASSWORD") ||
+    raise """
+    environment variable DB_PASSWORD is missing.
+    """
+
+db_database =
+  System.get_env("DB_DATABASE") ||
+    raise """
+    environment variable DB_DATABASE is missing.
+    """
+
+
+
 config :ketbin, Ketbin.Repo,
   ssl: false,
+  database: db_database,
+  username: db_username,
+  password: db_password,
+  hostname: db_host,
+  port: db_port,
   # verify: :verify_peer,
   socket_options: [:inet6],
-  url: database_url,
   pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
   # cacertfile: "priv/cert.pem"
 secret_key_base =
