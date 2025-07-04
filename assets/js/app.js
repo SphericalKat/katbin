@@ -13,3 +13,16 @@ import "../css/app.css";
 //     import socket from "./socket"
 //
 import "phoenix_html";
+
+// Import Katbin modules
+import { ClipboardManager } from "./clipboard";
+import { KeyboardShortcuts } from "./keyboard-shortcuts";
+
+// Initialize modules when DOM is ready
+document.addEventListener("DOMContentLoaded", function() {
+  KeyboardShortcuts.init();
+  ClipboardManager.init();
+});
+
+// Export for global access if needed
+window.ClipboardManager = ClipboardManager;

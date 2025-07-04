@@ -27,6 +27,18 @@
                 <%= text_input f, :custom_url, [class: "px-2 mr-2 outline-none text-black px-2 py-1", placeholder: "Custom URL"]  %>
             </div>
             <% end %>
+            
+            <button type="button" 
+                    data-clipboard-copy="textarea" 
+                    class="mr-2" 
+                    title="CopyClipboard">
+                <svg 
+                                    class="h-6 w-6 cursor-pointer fill-current text-white hover:text-amber"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24">
+                    <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                </svg>
+            </button>
             <button type="submit">
                 <svg
 									class="h-6 w-6 cursor-pointer fill-current text-white hover:text-amber"
