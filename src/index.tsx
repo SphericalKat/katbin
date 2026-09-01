@@ -110,13 +110,13 @@ const SCRYPT_N = 16_384;
 const SCRYPT_R = 8;
 const SCRYPT_P = 1;
 const SCRYPT_KEY_LENGTH = 32;
+const FLASH_COOKIE = "__Host-katbin_flash";
+const OWNERSHIP_ERROR = "You don't own this paste!";
 const consonants = "bcdfghjklmnpqrstvwxyz";
 const vowels = "aeiou";
-const idPattern = `(?:(?:[${consonants}][${vowels}]){5}[${consonants}]?|(?:[${vowels}][${consonants}]){5}[${vowels}]?)`;
+const customIdPattern = /^[A-Za-z0-9_-]{1,64}$/;
+const reservedIds = new Set(["api", "assets", "edit", "pastes", "raw", "users", "v"]);
 
-const idSchema = z.object({
-  id: z.string().regex(new RegExp(`^${idPattern}$`)),
-});
 const pastePathSchema = z.object({ id: z.string().min(1).max(128) });
 const pasteFormSchema = z.object({ "paste[content]": z.string().min(1).max(MAX_BODY_BYTES) });
 const emailSchema = z.preprocess(
@@ -145,6 +145,7 @@ const loginFormSchema = z.object({
   "user[remember_me]": z.enum(["true"]).optional(),
 });
 const csrfFormSchema = z.object({ _csrf: z.string().min(1) });
+const customIdSchema = z.string().regex(customIdPattern);
 
 const isUrl = (value: string) => {
   try {
@@ -163,8 +164,8 @@ const pastePath = (value: string) => {
   const parsed = pastePathSchema.safeParse({ id: value });
   if (!parsed.success) return null;
   const [id, ...extensions] = parsed.data.id.split(".");
-  if (!idSchema.safeParse({ id }).success) return null;
-  return { id, extension: extensions.join(".") };
+  if (!id) return null;
+  return { id, fullId: parsed.data.id, extension: extensions.join(".") };
 };
 
 const dbFor = (env: Bindings) => drizzle(env.DB);
@@ -261,6 +262,28 @@ const getCurrentUser = async (env: Bindings, session: Session | null) =>
     ? ((await dbFor(env).select().from(users).where(eq(users.id, session.userId)).get()) ?? null)
     : null;
 
+const sessionFromRequest = async (c: AppContext) => {
+  const token = getCookie(c, SESSION_COOKIE);
+  return { token, session: token ? ((await sessionFromToken(c.env, token)) ?? null) : null };
+};
+
+const ownershipError = (c: AppContext, id: string) => {
+  setCookie(c, FLASH_COOKIE, OWNERSHIP_ERROR, {
+    httpOnly: true,
+    sameSite: "Lax",
+    secure: true,
+    path: "/",
+  });
+  return c.redirect(`/${encodeURIComponent(id)}`, 302);
+};
+
+const takeFlash = (c: AppContext) => {
+  const flash = getCookie(c, FLASH_COOKIE);
+  if (flash)
+    deleteCookie(c, FLASH_COOKIE, { httpOnly: true, sameSite: "Lax", secure: true, path: "/" });
+  return flash;
+};
+
 const hashPassword = (password: string) => {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const key = scryptSync(password, salt, SCRYPT_KEY_LENGTH, {
@@ -314,6 +337,7 @@ const Header: FC<{ csrf?: string; user?: User | null }> = ({ csrf, user }) => (
       {user ? (
         <div class="flex items-center gap-4">
           <span class="text-amber">{user.email}</span>
+          <a href="/pastes">My Pastes</a>
           {csrf ? (
             <form action="/users/log_out" method="post" data-method="delete">
               <input type="hidden" name="_csrf" value={csrf} />
@@ -358,6 +382,15 @@ const Home: FC<{ csrf: string; user: User | null }> = ({ csrf, user }) => (
             aria-label="Paste content"
           />
           <div class="absolute right-0 top-0 p-4">
+            {user ? (
+              <input
+                class="mr-2 px-2 py-1 text-black outline-none"
+                name="paste[custom_url]"
+                placeholder="Custom URL"
+                maxLength={64}
+                pattern="[A-Za-z0-9_-]{1,64}"
+              />
+            ) : null}
             <button type="submit" aria-label="Save paste">
               <svg
                 class="h-6 w-6 cursor-pointer fill-current text-white hover:text-amber"
@@ -495,22 +528,106 @@ const LoginPage: FC<{ csrf: string; error?: string }> = ({ csrf, error }) => (
   </>
 );
 
-const PastePage: FC<{ id: string; content: string; extension: string }> = ({
-  id,
-  content,
-  extension,
-}) => (
+const PastePage: FC<{
+  id: string;
+  content: string;
+  extension: string;
+  csrf?: string;
+  user?: User | null;
+  showEdit?: boolean;
+  error?: string;
+}> = ({ id, content, extension, csrf, user, showEdit, error }) => (
   <html lang="en">
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>{id} | Katbin</title>
       <link rel="stylesheet" href={stylesheetUrl} />
+      <script type="module" src={clientUrl} />
     </head>
     <body class="flex h-full flex-col">
-      <Header />
+      <Header csrf={csrf} user={user} />
       <main class="h-full w-full overflow-y-auto bg-light-grey">
+        {error === OWNERSHIP_ERROR ? (
+          <p class="alert alert-danger">{raw(OWNERSHIP_ERROR)}</p>
+        ) : error ? (
+          <p class="alert alert-danger">{error}</p>
+        ) : null}
+        {showEdit ? (
+          <a class="absolute right-0 top-0 p-4" href={`/edit/${id}`}>
+            Edit
+          </a>
+        ) : null}
         <PasteContent content={content} extension={extension} />
+      </main>
+      <Footer />
+    </body>
+  </html>
+);
+
+const PastesPage: FC<{ csrf: string; user: User; pastes: Array<{ id: string }> }> = ({
+  csrf,
+  user,
+  pastes,
+}) => (
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>My Pastes | Katbin</title>
+      <link rel="stylesheet" href={stylesheetUrl} />
+      <script type="module" src={clientUrl} />
+    </head>
+    <body class="flex h-full flex-col">
+      <Header csrf={csrf} user={user} />
+      <main class="flex h-full w-full flex-col overflow-hidden bg-light-grey">
+        <ul class="h-full w-full overflow-y-auto px-6 py-4">
+          {pastes.map((paste) => (
+            <li>
+              <a href={`/v/${paste.id}`}>https://katb.in/v/{paste.id}</a>
+            </li>
+          ))}
+        </ul>
+      </main>
+      <Footer />
+    </body>
+  </html>
+);
+
+const EditPage: FC<{ csrf: string; user: User; paste: { id: string; content: string } }> = ({
+  csrf,
+  user,
+  paste,
+}) => (
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Edit {paste.id} | Katbin</title>
+      <link rel="stylesheet" href={stylesheetUrl} />
+      <script type="module" src={clientUrl} />
+    </head>
+    <body class="flex h-full flex-col">
+      <Header csrf={csrf} user={user} />
+      <main class="flex h-full w-full flex-col overflow-hidden bg-light-grey">
+        <form
+          class="relative flex h-full w-full flex-col"
+          action={`/${paste.id}`}
+          method="post"
+          data-method="patch"
+        >
+          <input type="hidden" name="_csrf" value={csrf} />
+          <textarea
+            class="h-full w-full resize-none bg-light-grey px-6 py-4 font-bold outline-none"
+            name="paste[content]"
+            aria-label="Paste content"
+          >
+            {paste.content}
+          </textarea>
+          <button class="absolute right-0 top-0 p-4" type="submit">
+            Save
+          </button>
+        </form>
       </main>
       <Footer />
     </body>
@@ -733,41 +850,74 @@ app.post("/", async (c) => {
     return c.json({ error: "Forbidden" }, 403);
   const parsed = pasteFormSchema.safeParse(form);
   if (!parsed.success) return c.json({ error: "Invalid input" }, 400);
-  const id = generateId();
+  const customId = typeof form["paste[custom_url]"] === "string" ? form["paste[custom_url]"] : "";
+  let id = generateId();
+  if (customId) {
+    if (
+      !session.userId ||
+      !customIdSchema.safeParse(customId).success ||
+      reservedIds.has(customId.toLowerCase())
+    ) {
+      return c.json({ error: "Invalid custom ID" }, 400);
+    }
+    if (
+      await dbFor(c.env).select({ id: pastes.id }).from(pastes).where(eq(pastes.id, customId)).get()
+    ) {
+      return c.json({ error: "Custom ID already taken" }, 400);
+    }
+    id = customId;
+  }
   const content = parsed.data["paste[content]"];
   const urlPaste = isUrl(content);
   const contentBytes = new TextEncoder().encode(content);
   const contentSha256 = await sha256(contentBytes);
   const useR2 = contentBytes.byteLength > R2_THRESHOLD_BYTES;
-  if (useR2) await c.env.PASTES.put(id, contentBytes);
-  await dbFor(c.env)
-    .insert(pastes)
-    .values({
-      id,
-      content: useR2 ? "" : content,
-      isUrl: urlPaste,
-      storageType: useR2 ? "r2" : "d1",
-      storageKey: useR2 ? id : null,
-      contentLengthBytes: contentBytes.byteLength,
-      contentSha256,
-    });
+  let uploaded = false;
+  try {
+    if (useR2) {
+      await c.env.PASTES.put(id, contentBytes);
+      uploaded = true;
+    }
+    await dbFor(c.env)
+      .insert(pastes)
+      .values({
+        id,
+        content: useR2 ? "" : content,
+        isUrl: urlPaste,
+        ownerId: session.userId,
+        storageType: useR2 ? "r2" : "d1",
+        storageKey: useR2 ? id : null,
+        contentLengthBytes: contentBytes.byteLength,
+        contentSha256,
+      });
+  } catch (error) {
+    if (uploaded) await c.env.PASTES.delete(id);
+    if (String(error).toLowerCase().includes("unique"))
+      return c.json({ error: "Custom ID already taken" }, 400);
+    throw error;
+  }
   return c.redirect(`${urlPaste ? "/v" : ""}/${id}`, 303);
 });
 
 const findPaste = async (c: AppContext, value: string) => {
   const path = pastePath(value);
   if (!path) return null;
-  const paste = await dbFor(c.env)
-    .select({
-      id: pastes.id,
-      content: pastes.content,
-      isUrl: pastes.isUrl,
-      storageType: pastes.storageType,
-      storageKey: pastes.storageKey,
-    })
-    .from(pastes)
-    .where(eq(pastes.id, path.id))
-    .get();
+  const findById = (id: string) =>
+    dbFor(c.env)
+      .select({
+        id: pastes.id,
+        content: pastes.content,
+        isUrl: pastes.isUrl,
+        ownerId: pastes.ownerId,
+        storageType: pastes.storageType,
+        storageKey: pastes.storageKey,
+      })
+      .from(pastes)
+      .where(eq(pastes.id, id))
+      .get();
+  const paste =
+    (await findById(path.id)) ??
+    (path.fullId !== path.id ? await findById(path.fullId) : undefined);
   if (!paste) return null;
   if (paste.storageType === "r2") {
     if (!paste.storageKey) return null;
@@ -781,6 +931,89 @@ const findPaste = async (c: AppContext, value: string) => {
   return { paste, extension: path.extension };
 };
 
+app.get("/pastes", async (c) => {
+  const { token, session } = await sessionFromRequest(c);
+  const user = await getCurrentUser(c.env, session);
+  if (!token || !session?.userId || !user) return c.redirect("/users/log_in", 302);
+  const ownedPastes = await dbFor(c.env)
+    .select({ id: pastes.id })
+    .from(pastes)
+    .where(eq(pastes.ownerId, user.id))
+    .all();
+  return c.html(<PastesPage csrf={await csrfToken(token)} user={user} pastes={ownedPastes} />);
+});
+
+app.get("/edit/:id", async (c) => {
+  const value = c.req.param("id");
+  const result = await findPaste(c, value);
+  const { token, session } = await sessionFromRequest(c);
+  const user = await getCurrentUser(c.env, session);
+  if (!result) return c.text("Not found", 404);
+  if (!token || !user || result.paste.ownerId !== user.id) return ownershipError(c, value);
+  return c.html(<EditPage csrf={await csrfToken(token)} user={user} paste={result.paste} />);
+});
+
+app.on(["PATCH", "PUT"], "/:id", async (c) => {
+  if (!sameOrigin(c.req.raw)) return c.json({ error: "Forbidden" }, 403);
+  const { token, session } = await sessionFromRequest(c);
+  if (!token || !session) return c.json({ error: "Forbidden" }, 403);
+  const contentLength = Number(c.req.header("Content-Length"));
+  if (contentLength > MAX_BODY_BYTES) return c.json({ error: "Payload too large" }, 413);
+  const form = await parseForm(c.req.raw);
+  const csrf = csrfFormSchema.safeParse(form);
+  if (!csrf.success || !sameValue(csrf.data._csrf, await csrfToken(token)))
+    return c.json({ error: "Forbidden" }, 403);
+  const parsed = pasteFormSchema.safeParse(form);
+  if (!parsed.success) return c.json({ error: "Invalid input" }, 400);
+  const value = c.req.param("id");
+  const result = await findPaste(c, value);
+  const user = await getCurrentUser(c.env, session);
+  if (!result) return c.text("Not found", 404);
+  if (!user || result.paste.ownerId !== user.id) return ownershipError(c, value);
+
+  const content = parsed.data["paste[content]"];
+  const contentBytes = new TextEncoder().encode(content);
+  if (contentBytes.byteLength > MAX_BODY_BYTES) return c.json({ error: "Payload too large" }, 413);
+  const urlPaste = isUrl(content);
+  const useR2 = contentBytes.byteLength > R2_THRESHOLD_BYTES;
+  const oldStorageKey = result.paste.storageKey;
+  const newStorageKey = useR2
+    ? `${result.paste.id}-${encodeBase64Url(crypto.getRandomValues(new Uint8Array(12)))}`
+    : null;
+  let uploaded = false;
+  try {
+    if (newStorageKey) {
+      await c.env.PASTES.put(newStorageKey, contentBytes);
+      uploaded = true;
+    }
+    await dbFor(c.env)
+      .update(pastes)
+      .set({
+        content: useR2 ? "" : content,
+        isUrl: urlPaste,
+        storageType: useR2 ? "r2" : "d1",
+        storageKey: newStorageKey,
+        contentLengthBytes: contentBytes.byteLength,
+        contentSha256: await sha256(contentBytes),
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(pastes.id, result.paste.id));
+  } catch (error) {
+    if (uploaded && newStorageKey) await c.env.PASTES.delete(newStorageKey);
+    throw error;
+  }
+  if (oldStorageKey && oldStorageKey !== newStorageKey) {
+    try {
+      await c.env.PASTES.delete(oldStorageKey);
+    } catch (error) {
+      console.error(
+        JSON.stringify({ error: String(error), message: "old paste object cleanup failed" }),
+      );
+    }
+  }
+  return c.redirect(`${urlPaste ? "/v" : ""}/${result.paste.id}`, 303);
+});
+
 app.get("/:id/raw", async (c) => {
   const result = await findPaste(c, c.req.param("id"));
   if (!result) return c.text("Not found", 404);
@@ -790,8 +1023,18 @@ app.get("/:id/raw", async (c) => {
 app.get("/v/:id", async (c) => {
   const result = await findPaste(c, c.req.param("id"));
   if (!result) return c.text("Not found", 404);
+  const { token, session } = await sessionFromRequest(c);
+  const user = await getCurrentUser(c.env, session);
   return c.html(
-    <PastePage id={result.paste.id} content={result.paste.content} extension={result.extension} />,
+    <PastePage
+      id={result.paste.id}
+      content={result.paste.content}
+      extension={result.extension}
+      csrf={token && session ? await csrfToken(token) : undefined}
+      user={user}
+      showEdit={user?.id === result.paste.ownerId}
+      error={takeFlash(c)}
+    />,
   );
 });
 
@@ -799,8 +1042,18 @@ app.get("/:id", async (c) => {
   const result = await findPaste(c, c.req.param("id"));
   if (!result) return c.text("Not found", 404);
   if (result.paste.isUrl) return c.redirect(result.paste.content.replace(/[\r\n]/g, ""), 302);
+  const { token, session } = await sessionFromRequest(c);
+  const user = await getCurrentUser(c.env, session);
   return c.html(
-    <PastePage id={result.paste.id} content={result.paste.content} extension={result.extension} />,
+    <PastePage
+      id={result.paste.id}
+      content={result.paste.content}
+      extension={result.extension}
+      csrf={token && session ? await csrfToken(token) : undefined}
+      user={user}
+      showEdit={user?.id === result.paste.ownerId}
+      error={takeFlash(c)}
+    />,
   );
 });
 

@@ -179,7 +179,7 @@ describe("Katbin shell", () => {
     const unsupportedBody = await unsupported.text();
 
     expect(markdownBody).toContain("<h1");
-    expect(markdownBody).not.toContain("<script");
+    expect(markdownBody).not.toContain("<script>alert");
     expect(markdownBody).toContain('href="https://example.com"');
     expect(markdownBody).toContain('src="https://example.com/image.png"');
     expect(markdownBody).not.toContain("javascript:");
@@ -478,6 +478,7 @@ class TestDatabase {
       id: string;
       content: string;
       is_url: boolean;
+      owner_id: number | null;
       storage_type: string;
       storage_key: string | null;
       content_length_bytes: number;
@@ -531,6 +532,7 @@ class TestDatabase {
       inserted_at: "",
       updated_at: "",
     });
+    return id;
   }
 
   user(email: string) {
@@ -549,18 +551,49 @@ class TestDatabase {
     return this.rows.size;
   }
 
+  addPaste(paste: { id: string; content: string; ownerId?: number | null; isUrl?: boolean }) {
+    this.rows.set(paste.id, {
+      id: paste.id,
+      content: paste.content,
+      is_url: paste.isUrl ?? false,
+      owner_id: paste.ownerId ?? null,
+      storage_type: "d1",
+      storage_key: null,
+      content_length_bytes: new TextEncoder().encode(paste.content).byteLength,
+      content_sha256: "",
+    });
+  }
+
   prepare(query: string) {
     const normalized = query.toLowerCase();
     return {
       bind: (...values: unknown[]) => ({
         run: async () => {
           if (normalized.includes('insert into "pastes"')) {
-            const [id, content, isUrl, storageType, storageKey, contentLengthBytes, contentSha256] =
-              values as [string, string, boolean, string, string | null, number, string];
+            const [
+              id,
+              content,
+              isUrl,
+              ownerId,
+              storageType,
+              storageKey,
+              contentLengthBytes,
+              contentSha256,
+            ] = values as [
+              string,
+              string,
+              boolean,
+              number | null,
+              string,
+              string | null,
+              number,
+              string,
+            ];
             this.rows.set(id, {
               id,
               content,
               is_url: isUrl,
+              owner_id: ownerId,
               storage_type: storageType,
               storage_key: storageKey,
               content_length_bytes: contentLengthBytes,
@@ -597,6 +630,28 @@ class TestDatabase {
             if (user) user.hashed_password = hashedPassword;
           } else if (normalized.startsWith('delete from "sessions"')) {
             this.sessionRows.delete(values[0] as string);
+          } else if (normalized.startsWith('update "pastes"')) {
+            const [
+              content,
+              isUrl,
+              storageType,
+              storageKey,
+              contentLengthBytes,
+              contentSha256,
+              updatedAt,
+            ] = values as [string, boolean, string, string | null, number, string, string];
+            const row = this.rows.get(values.at(-1) as string);
+            if (row) {
+              Object.assign(row, {
+                content,
+                is_url: isUrl,
+                storage_type: storageType,
+                storage_key: storageKey,
+                content_length_bytes: contentLengthBytes,
+                content_sha256: contentSha256,
+                updated_at: updatedAt,
+              });
+            }
           }
           return { success: true };
         },
@@ -614,8 +669,20 @@ class TestDatabase {
             const currentTime = values.find((value) => typeof value === "number") as number;
             return { results: session && session.expires_at > currentTime ? [session] : [] };
           }
-          const row = this.rows.get(values.at(-1) as string);
-          return { results: row ? [row] : [] };
+          if (normalized.includes('from "pastes"')) {
+            const id = values.find((value) => typeof value === "string");
+            if (id) {
+              const row = this.rows.get(id);
+              return { results: row ? [row] : [] };
+            }
+            const ownerId = values.find((value) => typeof value === "number");
+            return {
+              results: [...this.rows.values()].filter(
+                (row) => ownerId === undefined || row.owner_id === ownerId,
+              ),
+            };
+          }
+          return { results: [] };
         },
         raw: async () => {
           if (normalized.includes('from "sessions"')) {
@@ -645,8 +712,36 @@ class TestDatabase {
                 ]
               : [];
           }
-          const row = this.rows.get(values.at(-1) as string);
-          return row ? [[row.id, row.content, row.is_url, row.storage_type, row.storage_key]] : [];
+          if (normalized.includes('from "pastes"')) {
+            const id = values.find((value) => typeof value === "string");
+            if (id) {
+              const row = this.rows.get(id);
+              return row
+                ? [
+                    [
+                      row.id,
+                      row.content,
+                      row.is_url,
+                      row.owner_id,
+                      row.storage_type,
+                      row.storage_key,
+                    ],
+                  ]
+                : [];
+            }
+            const ownerId = values.find((value) => typeof value === "number");
+            return [...this.rows.values()]
+              .filter((row) => ownerId === undefined || row.owner_id === ownerId)
+              .map((row) => [
+                row.id,
+                row.content,
+                row.is_url,
+                row.owner_id,
+                row.storage_type,
+                row.storage_key,
+              ]);
+          }
+          return [];
         },
       }),
     };
@@ -685,3 +780,210 @@ class TestBucket {
     return this.objects.size;
   }
 }
+
+const loginAs = async (db: TestDatabase, email: string) => {
+  const userId = await db.addUser(email, "password", false);
+  const loginPage = await app.request(`https://katb.in/users/log_in`, undefined, {
+    DB: db,
+  } as never);
+  const login = await app.request(
+    "https://katb.in/users/log_in",
+    formRequest(cookieFrom(loginPage)!, {
+      _csrf: csrfFrom(await loginPage.text()),
+      "user[email]": email,
+      "user[password]": "password",
+    }),
+    { DB: db } as never,
+  );
+  const cookie = cookieFrom(login)!;
+  const home = await app.request("https://katb.in/", { headers: { Cookie: cookie } }, {
+    DB: db,
+  } as never);
+  return { userId, cookie, csrf: csrfFrom(await home.text()) };
+};
+
+const requestWithMethod = (
+  method: "PATCH" | "PUT",
+  cookie: string,
+  values: Record<string, string>,
+) => ({
+  method,
+  headers: {
+    Cookie: cookie,
+    Origin: "https://katb.in",
+    "Content-Type": "application/x-www-form-urlencoded",
+  },
+  body: new URLSearchParams(values),
+});
+
+describe("owned pastes", () => {
+  it("assigns authenticated owners and keeps migrated identifiers readable", async () => {
+    const db = new TestDatabase();
+    const auth = await loginAs(db, "owner@example.com");
+    const created = await app.request(
+      "https://katb.in/",
+      formRequest(auth.cookie, {
+        _csrf: auth.csrf,
+        "paste[content]": "owned",
+        "paste[custom_url]": "my-paste_1",
+      }),
+      { DB: db } as never,
+    );
+    db.addPaste({ id: "legacy.id", content: "migrated" });
+
+    expect(created.status).toBe(303);
+    expect(created.headers.get("location")).toBe("/my-paste_1");
+    expect(db.paste("my-paste_1")).toMatchObject({ owner_id: auth.userId });
+    expect(
+      (await app.request("https://katb.in/legacy.id", undefined, { DB: db } as never)).status,
+    ).toBe(200);
+  });
+
+  it("rejects unsafe, oversized, reserved, and duplicate custom identifiers", async () => {
+    const db = new TestDatabase();
+    const auth = await loginAs(db, "owner@example.com");
+    const create = (customId: string) =>
+      app.request(
+        "https://katb.in/",
+        formRequest(auth.cookie, {
+          _csrf: auth.csrf,
+          "paste[content]": "content",
+          "paste[custom_url]": customId,
+        }),
+        { DB: db } as never,
+      );
+
+    expect((await create("not safe")).status).toBe(400);
+    expect((await create("x".repeat(65))).status).toBe(400);
+    expect((await create("users")).status).toBe(400);
+    expect((await create("taken")).status).toBe(303);
+    expect((await create("taken")).status).toBe(400);
+  });
+
+  it("lists only owned pastes and shows the edit control to the owner", async () => {
+    const db = new TestDatabase();
+    const owner = await loginAs(db, "owner@example.com");
+    const other = await loginAs(db, "other@example.com");
+    const create = (auth: { cookie: string; csrf: string }, id: string) =>
+      app.request(
+        "https://katb.in/",
+        formRequest(auth.cookie, {
+          _csrf: auth.csrf,
+          "paste[content]": id,
+          "paste[custom_url]": id,
+        }),
+        { DB: db } as never,
+      );
+    await create(owner, "owner-paste");
+    await create(other, "other-paste");
+
+    const listing = await app.request(
+      "https://katb.in/pastes",
+      { headers: { Cookie: owner.cookie } },
+      { DB: db } as never,
+    );
+    const ownedView = await app.request(
+      "https://katb.in/v/owner-paste",
+      {
+        headers: { Cookie: owner.cookie },
+      },
+      { DB: db } as never,
+    );
+    const otherView = await app.request(
+      "https://katb.in/v/owner-paste",
+      {
+        headers: { Cookie: other.cookie },
+      },
+      { DB: db } as never,
+    );
+    const ownerEdit = await app.request(
+      "https://katb.in/edit/owner-paste",
+      { headers: { Cookie: owner.cookie } },
+      { DB: db } as never,
+    );
+    const otherEdit = await app.request(
+      "https://katb.in/edit/owner-paste",
+      { headers: { Cookie: other.cookie } },
+      { DB: db } as never,
+    );
+    const anonymousListing = await app.request("https://katb.in/pastes", undefined, {
+      DB: db,
+    } as never);
+    const listingBody = await listing.text();
+
+    expect(listing.status).toBe(200);
+    expect(listingBody).toContain("/v/owner-paste");
+    expect(listingBody).not.toContain("/v/other-paste");
+    expect(await ownedView.text()).toContain("/edit/owner-paste");
+    expect(await otherView.text()).not.toContain("/edit/owner-paste");
+    expect(ownerEdit.status).toBe(200);
+    expect(await ownerEdit.text()).toContain('name="paste[content]"');
+    expect(otherEdit.status).toBe(302);
+    expect(anonymousListing.status).toBe(302);
+  });
+
+  it("updates owned content between D1 and R2 and rejects another user", async () => {
+    const db = new TestDatabase();
+    const bucket = new TestBucket();
+    const bindings = { DB: db, PASTES: bucket } as never;
+    const owner = await loginAs(db, "owner@example.com");
+    const other = await loginAs(db, "other@example.com");
+    await app.request(
+      "https://katb.in/",
+      formRequest(owner.cookie, {
+        _csrf: owner.csrf,
+        "paste[content]": "small",
+        "paste[custom_url]": "editable",
+      }),
+      bindings,
+    );
+
+    const large = "🙂".repeat(250_001);
+    const movedToR2 = await app.request(
+      "https://katb.in/editable",
+      requestWithMethod("PATCH", owner.cookie, { _csrf: owner.csrf, "paste[content]": large }),
+      bindings,
+    );
+    expect(movedToR2.status).toBe(303);
+    expect(db.paste("editable")).toMatchObject({ storage_type: "r2", content: "" });
+    expect(await bucket.text(db.paste("editable")!.storage_key!)).toBe(large);
+
+    const movedToD1 = await app.request(
+      "https://katb.in/editable",
+      requestWithMethod("PUT", owner.cookie, {
+        _csrf: owner.csrf,
+        "paste[content]": "small again",
+      }),
+      bindings,
+    );
+    expect(movedToD1.status).toBe(303);
+    expect(db.paste("editable")).toMatchObject({
+      storage_type: "d1",
+      content: "small again",
+      storage_key: null,
+    });
+    expect(bucket.size()).toBe(0);
+    expect(
+      await (await app.request("https://katb.in/editable/raw", undefined, bindings)).text(),
+    ).toBe("small again");
+
+    const unauthorized = await app.request(
+      "https://katb.in/editable",
+      requestWithMethod("PATCH", other.cookie, {
+        _csrf: other.csrf,
+        "paste[content]": "not yours",
+      }),
+      bindings,
+    );
+    expect(unauthorized.status).toBe(302);
+    expect(unauthorized.headers.get("location")).toBe("/editable");
+    const flashCookie = unauthorized.headers.get("set-cookie")!.split(";", 1)[0];
+    const redirected = await app.request(
+      "https://katb.in/editable",
+      { headers: { Cookie: `${other.cookie}; ${flashCookie}` } },
+      bindings,
+    );
+    expect(await redirected.text()).toContain("You don't own this paste!");
+    expect(db.paste("editable")?.content).toBe("small again");
+  });
+});
