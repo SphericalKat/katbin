@@ -4,6 +4,8 @@ import { scryptSync } from "node:crypto";
 
 import { app } from "./index";
 
+type ApiPaste = { id: string; content: string; is_url: boolean };
+
 describe("Katbin shell", () => {
   it("serves the home page with secure headers and the existing navigation", async () => {
     const response = await app.request("https://katb.in/", undefined, {
@@ -289,6 +291,88 @@ describe("Katbin shell", () => {
       expect(response.status).toBe(404);
       expect(await response.text()).toBe("Not found");
     }
+  });
+
+  it("preserves the JSON paste API contract across sessions and storage", async () => {
+    const db = new TestDatabase();
+    const bucket = new TestBucket();
+    const bindings = { DB: db, PASTES: bucket } as never;
+    const anonymous = await app.request(
+      "https://katb.in/api/paste",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paste: { content: "https://example.com/docs" } }),
+      },
+      bindings,
+    );
+    const auth = await loginAs(db, "api-owner@example.com");
+    const owned = await app.request(
+      "https://katb.in/api/paste",
+      {
+        method: "POST",
+        headers: { Cookie: auth.cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ paste: { content: "small text" } }),
+      },
+      bindings,
+    );
+    const largeContent = "🙂".repeat(250_001);
+    const large = await app.request(
+      "https://katb.in/api/paste",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paste: { content: largeContent } }),
+      },
+      bindings,
+    );
+    const anonymousBody = (await anonymous.json()) as ApiPaste;
+    const ownedBody = (await owned.json()) as ApiPaste;
+    const largeBody = (await large.json()) as ApiPaste;
+
+    expect(anonymous.status).toBe(201);
+    expect(anonymousBody).toMatchObject({ content: "https://example.com/docs", is_url: true });
+    expect(Object.keys(anonymousBody)).toEqual(["id", "content", "is_url"]);
+    expect(owned.status).toBe(201);
+    expect(db.paste(ownedBody.id as string)).toMatchObject({ owner_id: auth.userId });
+    expect(large.status).toBe(201);
+    expect(largeBody).toMatchObject({ content: largeContent, is_url: false });
+    expect(await bucket.text(largeBody.id as string)).toBe(largeContent);
+
+    for (const body of [anonymousBody, largeBody]) {
+      const response = await app.request(
+        `https://katb.in/api/paste/${body.id}.md`,
+        undefined,
+        bindings,
+      );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual(body);
+    }
+    expect((await app.request("https://katb.in/api/paste", undefined, bindings)).status).toBe(404);
+    expect(
+      (await app.request("https://katb.in/api/paste/missing", undefined, bindings)).status,
+    ).toBe(404);
+  });
+
+  it("rejects non-JSON and invalid API requests with safe client errors", async () => {
+    const db = new TestDatabase();
+    const request = (headers: HeadersInit, body: BodyInit) =>
+      app.request("https://katb.in/api/paste", { method: "POST", headers, body }, {
+        DB: db,
+      } as never);
+
+    expect(
+      (
+        await request(
+          { "Content-Type": "application/x-www-form-urlencoded" },
+          "paste%5Bcontent%5D=text",
+        )
+      ).status,
+    ).toBe(415);
+    expect((await request({ "Content-Type": "application/json" }, "not-json")).status).toBe(400);
+    expect(
+      (await request({ "Content-Type": "application/json" }, JSON.stringify({ paste: {} }))).status,
+    ).toBe(400);
   });
 });
 

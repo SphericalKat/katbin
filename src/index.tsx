@@ -124,6 +124,9 @@ const reservedIds = new Set(["api", "assets", "edit", "pastes", "raw", "users", 
 
 const pastePathSchema = z.object({ id: z.string().min(1).max(128) });
 const pasteFormSchema = z.object({ "paste[content]": z.string().min(1).max(MAX_BODY_BYTES) });
+const pasteApiSchema = z.object({
+  paste: z.object({ content: z.string().min(1).max(MAX_BODY_BYTES) }),
+});
 const emailSchema = z.preprocess(
   (value) => (typeof value === "string" ? value : ""),
   z
@@ -1078,6 +1081,41 @@ const EditPage: FC<{ csrf: string; user: User; paste: { id: string; content: str
   </html>
 );
 
+const createStoredPaste = async (
+  c: AppContext,
+  content: string,
+  ownerId: number | null,
+  id = generateId(),
+) => {
+  const contentBytes = new TextEncoder().encode(content);
+  const contentSha256 = await sha256(contentBytes);
+  const useR2 = contentBytes.byteLength > R2_THRESHOLD_BYTES;
+  const urlPaste = isUrl(content);
+  let uploaded = false;
+  try {
+    if (useR2) {
+      await c.env.PASTES.put(id, contentBytes);
+      uploaded = true;
+    }
+    await dbFor(c.env)
+      .insert(pastes)
+      .values({
+        id,
+        content: useR2 ? "" : content,
+        isUrl: urlPaste,
+        ownerId,
+        storageType: useR2 ? "r2" : "d1",
+        storageKey: useR2 ? id : null,
+        contentLengthBytes: contentBytes.byteLength,
+        contentSha256,
+      });
+  } catch (error) {
+    if (uploaded) await c.env.PASTES.delete(id);
+    throw error;
+  }
+  return { id, urlPaste };
+};
+
 export const app = new Hono<{ Bindings: Bindings }>();
 
 app.use("*", async (c, next) => {
@@ -1605,6 +1643,37 @@ app.get("/users/settings/confirm_email/:token", async (c) => {
   return c.redirect("/users/settings", 302);
 });
 
+app.post("/api/paste", async (c) => {
+  const contentType = c.req.header("Content-Type")?.split(";", 1)[0].trim().toLowerCase();
+  if (contentType !== "application/json")
+    return c.json({ error: "Content-Type must be JSON" }, 415);
+  const contentLength = Number(c.req.header("Content-Length"));
+  if (contentLength > MAX_BODY_BYTES) return c.json({ error: "Payload too large" }, 413);
+  let body: unknown;
+  try {
+    const bodyBytes = await c.req.raw.arrayBuffer();
+    if (bodyBytes.byteLength > MAX_BODY_BYTES) return c.json({ error: "Payload too large" }, 413);
+    body = JSON.parse(new TextDecoder().decode(bodyBytes));
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+  const parsed = pasteApiSchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: "Invalid input" }, 400);
+  const { session } = await sessionFromRequest(c);
+  const { id, urlPaste } = await createStoredPaste(
+    c,
+    parsed.data.paste.content,
+    session?.userId ?? null,
+  );
+  return c.json({ id, content: parsed.data.paste.content, is_url: urlPaste }, 201);
+});
+
+app.get("/api/paste/:id", async (c) => {
+  const result = await findPaste(c, c.req.param("id"));
+  if (!result) return c.json({ error: "Not found" }, 404);
+  return c.json({ id: result.paste.id, content: result.paste.content, is_url: result.paste.isUrl });
+});
+
 app.post("/", async (c) => {
   if (!sameOrigin(c.req.raw)) return c.json({ error: "Forbidden" }, 403);
   const token = getCookie(c, SESSION_COOKIE);
@@ -1639,29 +1708,9 @@ app.post("/", async (c) => {
   }
   const content = parsed.data["paste[content]"];
   const urlPaste = isUrl(content);
-  const contentBytes = new TextEncoder().encode(content);
-  const contentSha256 = await sha256(contentBytes);
-  const useR2 = contentBytes.byteLength > R2_THRESHOLD_BYTES;
-  let uploaded = false;
   try {
-    if (useR2) {
-      await c.env.PASTES.put(id, contentBytes);
-      uploaded = true;
-    }
-    await dbFor(c.env)
-      .insert(pastes)
-      .values({
-        id,
-        content: useR2 ? "" : content,
-        isUrl: urlPaste,
-        ownerId: session.userId,
-        storageType: useR2 ? "r2" : "d1",
-        storageKey: useR2 ? id : null,
-        contentLengthBytes: contentBytes.byteLength,
-        contentSha256,
-      });
+    await createStoredPaste(c, content, session.userId, id);
   } catch (error) {
-    if (uploaded) await c.env.PASTES.delete(id);
     if (String(error).toLowerCase().includes("unique"))
       return c.json({ error: "Custom ID already taken" }, 400);
     throw error;
