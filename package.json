@@ -9,7 +9,9 @@
     "test": "vp test",
     "build": "vp build",
     "types": "vp exec tsc --noEmit",
-    "migrate": "node tools/migrate-postgres.ts"
+    "migrate": "node tools/migrate-postgres.ts",
+    "replication:install": "node tools/install-postgres-replication.ts",
+    "replicate": "node tools/replicate-postgres.ts"
   },
   "dependencies": {
     "@alpinejs/csp": "3.17.1",

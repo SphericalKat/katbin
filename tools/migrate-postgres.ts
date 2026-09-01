@@ -6,7 +6,7 @@ import { pathToFileURL } from "node:url";
 
 import { R2_THRESHOLD_BYTES } from "../src/constants.ts";
 
-export type CursorName = "users" | "pastes";
+export type CursorName = "users" | "pastes" | "outbox";
 
 export interface UserRecord {
   id: number;
@@ -80,7 +80,7 @@ const encoder = new TextEncoder();
 
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
-const contentFor = (paste: PasteRecord): TargetPasteRecord => {
+export const contentFor = (paste: PasteRecord): TargetPasteRecord => {
   const bytes = encoder.encode(paste.content);
   const useR2 = bytes.byteLength > R2_THRESHOLD_BYTES;
   return {
@@ -209,6 +209,7 @@ const migratePastes = async (source: SourceAdapter, target: TargetAdapter, batch
 
 export interface MigrationOptions {
   batchSize?: number;
+  validateTotals?: boolean;
 }
 
 export interface MigrationSummary {
@@ -219,17 +220,17 @@ export interface MigrationSummary {
 export const migrate = async (
   source: SourceAdapter,
   target: TargetAdapter,
-  { batchSize = 100 }: MigrationOptions = {},
+  { batchSize = 100, validateTotals = true }: MigrationOptions = {},
 ): Promise<MigrationSummary> => {
   if (!Number.isSafeInteger(batchSize) || batchSize < 1)
     throw new Error("Migration batch size must be positive");
   const userTotal = await source.countUsers();
   await migrateUsers(source, target, batchSize);
-  await validateTotal(await target.countUsers(), userTotal, "users");
+  if (validateTotals) await validateTotal(await target.countUsers(), userTotal, "users");
 
   const pasteTotal = await source.countPastes();
   await migratePastes(source, target, batchSize);
-  await validateTotal(await target.countPastes(), pasteTotal, "pastes");
+  if (validateTotals) await validateTotal(await target.countPastes(), pasteTotal, "pastes");
   return { users: userTotal, pastes: pasteTotal };
 };
 
@@ -274,6 +275,10 @@ export class PostgresSource implements SourceAdapter {
 
   async close() {
     await this.pool.end();
+  }
+
+  async execute(text: string) {
+    await this.pool.query(text);
   }
 
   private async query<T extends Record<string, unknown>>(
@@ -347,6 +352,92 @@ export class PostgresSource implements SourceAdapter {
       insertedAt: row.insertedAt,
       updatedAt: row.updatedAt,
     }));
+  }
+
+  async getUser(id: number) {
+    const [row] = await this.query<{
+      id: string;
+      email: string;
+      hashedPassword: string;
+      confirmedAt: string | null;
+      insertedAt: string;
+      updatedAt: string;
+    }>(
+      `SELECT id::text AS id, email::text AS email, hashed_password AS "hashedPassword",
+              ${timestamp("confirmed_at")} AS "confirmedAt",
+              ${timestamp("inserted_at")} AS "insertedAt",
+              ${timestamp("updated_at")} AS "updatedAt"
+         FROM users WHERE id = $1`,
+      [id],
+    );
+    return row
+      ? {
+          id: parseId(row.id, "user"),
+          email: row.email,
+          normalizedEmail: row.email.toLowerCase(),
+          hashedPassword: row.hashedPassword,
+          confirmedAt: row.confirmedAt,
+          insertedAt: row.insertedAt,
+          updatedAt: row.updatedAt,
+        }
+      : null;
+  }
+
+  async getPaste(id: string) {
+    const [row] = await this.query<{
+      id: string;
+      isUrl: boolean;
+      content: string;
+      ownerId: string | null;
+      insertedAt: string;
+      updatedAt: string;
+    }>(
+      `SELECT id, is_url AS "isUrl", content, belongs_to::text AS "ownerId",
+              ${timestamp("inserted_at")} AS "insertedAt",
+              ${timestamp("updated_at")} AS "updatedAt"
+         FROM pastes WHERE id = $1`,
+      [id],
+    );
+    return row
+      ? {
+          id: row.id,
+          content: row.content,
+          isUrl: row.isUrl,
+          ownerId: parseOptionalId(row.ownerId, "paste owner"),
+          insertedAt: row.insertedAt,
+          updatedAt: row.updatedAt,
+        }
+      : null;
+  }
+
+  async listReplicationEventsAfter(cursor: string | null, limit: number) {
+    const where = cursor === null ? "" : "WHERE id > $1";
+    const values = cursor === null ? [limit] : [cursor, limit];
+    const rows = await this.query<{
+      id: string;
+      tableName: string;
+      rowId: string;
+      operation: string;
+    }>(
+      `SELECT id::text AS id, table_name AS "tableName", row_id AS "rowId", operation
+         FROM katbin_replication_events ${where}
+        ORDER BY id ASC LIMIT $${values.length}`,
+      values,
+    );
+    return rows.map((row) => {
+      if (row.tableName !== "users" && row.tableName !== "pastes")
+        throw new Error(`Unknown replication table: ${row.tableName}`);
+      if (row.operation !== "INSERT" && row.operation !== "UPDATE" && row.operation !== "DELETE")
+        throw new Error(`Unknown replication operation: ${row.operation}`);
+      if (!/^\d+$/.test(row.id) || BigInt(row.id) < 1n)
+        throw new Error(`Invalid replication event id: ${row.id}`);
+      return {
+        id: row.id,
+        table: row.tableName,
+        rowId: row.rowId,
+        operation: row.operation,
+      } as const;
+    });
   }
 }
 
@@ -490,6 +581,7 @@ export class CloudflareTarget implements TargetAdapter {
   }
 
   async upsertPaste(paste: TargetPasteRecord) {
+    const current = await this.getPaste(paste.id);
     await this.db.execute(
       `INSERT INTO pastes
          (id, content, is_url, owner_id, storage_type, storage_key,
@@ -518,6 +610,18 @@ export class CloudflareTarget implements TargetAdapter {
         paste.updatedAt,
       ],
     );
+    if (current?.storageKey && current.storageKey !== paste.storageKey)
+      await this.objects.delete(current.storageKey);
+  }
+
+  deleteUser(id: number) {
+    return this.db.execute("DELETE FROM users WHERE id = ?", [id]);
+  }
+
+  async deletePaste(id: string) {
+    const current = await this.getPaste(id);
+    await this.db.execute("DELETE FROM pastes WHERE id = ?", [id]);
+    if (current?.storageKey) await this.objects.delete(current.storageKey);
   }
 
   putPasteContent(key: string, content: Uint8Array) {
@@ -571,7 +675,7 @@ export class R2ObjectStore {
     this.fetch = options.fetch ?? fetch;
   }
 
-  private async request(method: "GET" | "PUT", key: string, body?: Uint8Array) {
+  private async request(method: "DELETE" | "GET" | "PUT", key: string, body?: Uint8Array) {
     const endpoint = new URL(this.options.endpoint);
     const basePath = endpoint.pathname.replace(/\/$/, "");
     const encodePathPart = (value: string) =>
@@ -617,6 +721,12 @@ export class R2ObjectStore {
     if (!response.ok) throw new Error(`R2 upload failed (${response.status})`);
   }
 
+  async delete(key: string) {
+    const response = await this.request("DELETE", key);
+    if (!response.ok && response.status !== 404)
+      throw new Error(`R2 delete failed (${response.status})`);
+  }
+
   async get(key: string) {
     const response = await this.request("GET", key);
     if (response.status === 404) return null;
@@ -636,7 +746,10 @@ export const runConfiguredMigration = async () => {
   try {
     const target = CloudflareTarget.fromEnv();
     const configuredBatchSize = Number(process.env.MIGRATION_BATCH_SIZE ?? 100);
-    return await migrate(source, target, { batchSize: configuredBatchSize });
+    return await migrate(source, target, {
+      batchSize: configuredBatchSize,
+      validateTotals: process.env.MIGRATION_VALIDATE_TOTALS !== "false",
+    });
   } finally {
     await source.close();
   }
