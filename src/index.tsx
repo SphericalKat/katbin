@@ -1135,8 +1135,15 @@ const EditPage: FC<{ csrf: string; user: User; paste: { id: string; content: str
           >
             {paste.content}
           </textarea>
-          <button class="absolute right-0 top-0 p-4" type="submit">
-            Save
+          <button class="absolute right-0 top-0 p-4" type="submit" aria-label="Save paste">
+            <svg
+              class="h-6 w-6 cursor-pointer fill-current text-white hover:text-amber"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path d="M17.6 3.6c-.4-.4-.9-.6-1.4-.6H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V7.8c0-.5-.2-1-.6-1.4l-2.8-2.8zM12 19c-1.7 0-3-1.3-3-3s1.3-3 3-3 3 1.3 3 3-1.3 3-3 3zm1-10H7c-1.1 0-2-.9-2-2s.9-2 2-2h6c1.1 0 2 .9 2 2s-.9 2-2 2z" />
+            </svg>
           </button>
         </form>
       </main>
