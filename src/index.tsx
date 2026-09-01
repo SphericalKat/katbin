@@ -15,6 +15,7 @@ import sanitizeHtml from "sanitize-html";
 import { z } from "zod";
 
 import clientUrl from "./client.ts?url";
+import { R2_THRESHOLD_BYTES } from "./constants";
 import { accountTokens, pastes, sessions, users } from "./db/schema";
 import stylesheetUrl from "./styles.css?url";
 
@@ -105,7 +106,6 @@ type Session = typeof sessions.$inferSelect;
 type FormErrors = Record<string, string[]>;
 
 const MAX_BODY_BYTES = 10_000_000;
-const R2_THRESHOLD_BYTES = 1_000_000;
 const SESSION_COOKIE = "__Host-katbin_session";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 60;
 const CONFIRMATION_MAX_AGE = 60 * 60 * 24 * 7;

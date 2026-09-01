@@ -7,9 +7,10 @@
     "strict": true,
     "jsx": "react-jsx",
     "jsxImportSource": "hono/jsx",
+    "allowImportingTsExtensions": true,
     "noEmit": true,
     "skipLibCheck": true,
     "types": ["@cloudflare/workers-types", "vite/client", "node"]
   },
-  "include": ["src"]
+  "include": ["src", "tools"]
 }
