@@ -45,8 +45,11 @@ export interface SourceAdapter {
 export interface TargetAdapter {
   getCursor(name: CursorName): Promise<string | null>;
   saveCursor(name: CursorName, cursor: string): Promise<void>;
+  upsertUsers?(users: readonly UserRecord[]): Promise<void>;
   upsertUser(user: UserRecord): Promise<void>;
+  upsertPastes?(pastes: readonly TargetPasteRecord[]): Promise<void>;
   upsertPaste(paste: TargetPasteRecord): Promise<void>;
+  putPasteContents?(contents: readonly { key: string; content: Uint8Array }[]): Promise<void>;
   putPasteContent(key: string, content: Uint8Array): Promise<void>;
   getUser(id: number): Promise<UserRecord | null>;
   getPaste(id: string): Promise<TargetPasteRecord | null>;
@@ -172,6 +175,7 @@ const migrateUsers = async (
   target: TargetAdapter,
   batchSize: number,
   total: number,
+  validateRecords: boolean,
   onProgress?: (progress: MigrationProgress) => void,
 ) => {
   const cursorValue = await target.getCursor("users");
@@ -180,13 +184,25 @@ const migrateUsers = async (
   for (;;) {
     const batch = await source.listUsersAfter(cursor, batchSize);
     if (!batch.length) return;
-    for (const user of batch) {
+    if (target.upsertUsers) {
       try {
-        await target.upsertUser(user);
-        await validateUser(target, user);
+        await target.upsertUsers(batch);
+        if (validateRecords) for (const user of batch) await validateUser(target, user);
       } catch (error) {
         if (error instanceof MigrationMismatchError) throw error;
-        throw new MigrationWriteError("user", user.id.toString());
+        const first = batch[0]!.id;
+        const last = batch.at(-1)!.id;
+        throw new MigrationWriteError("user", first === last ? String(first) : `${first}..${last}`);
+      }
+    } else {
+      for (const user of batch) {
+        try {
+          await target.upsertUser(user);
+          if (validateRecords) await validateUser(target, user);
+        } catch (error) {
+          if (error instanceof MigrationMismatchError) throw error;
+          throw new MigrationWriteError("user", user.id.toString());
+        }
       }
     }
     const nextCursor = batch.at(-1)!.id;
@@ -208,6 +224,7 @@ const migratePastes = async (
   target: TargetAdapter,
   batchSize: number,
   total: number,
+  validateRecords: boolean,
   onProgress?: (progress: MigrationProgress) => void,
 ) => {
   let cursor = await target.getCursor("pastes");
@@ -215,17 +232,40 @@ const migratePastes = async (
   for (;;) {
     const batch = await source.listPastesAfter(cursor, batchSize);
     if (!batch.length) return;
-    for (const sourcePaste of batch) {
-      const targetPaste = contentFor(sourcePaste);
+    const targetBatch = batch.map(contentFor);
+    if (target.upsertPastes) {
       try {
-        if (targetPaste.storageKey) {
-          await target.putPasteContent(targetPaste.storageKey, encoder.encode(sourcePaste.content));
-        }
-        await target.upsertPaste(targetPaste);
-        await validatePaste(target, sourcePaste, targetPaste);
+        const contents = targetBatch.flatMap((targetPaste, index) =>
+          targetPaste.storageKey
+            ? [{ key: targetPaste.storageKey, content: encoder.encode(batch[index]!.content) }]
+            : [],
+        );
+        if (target.putPasteContents) await target.putPasteContents(contents);
+        else for (const item of contents) await target.putPasteContent(item.key, item.content);
+        await target.upsertPastes(targetBatch);
+        if (validateRecords)
+          for (const [index, targetPaste] of targetBatch.entries())
+            await validatePaste(target, batch[index]!, targetPaste);
       } catch (error) {
         if (error instanceof MigrationMismatchError) throw error;
-        throw new MigrationWriteError("paste", sourcePaste.id);
+        const first = batch[0]!.id;
+        const last = batch.at(-1)!.id;
+        throw new MigrationWriteError("paste", first === last ? first : `${first}..${last}`);
+      }
+    } else {
+      for (const [index, targetPaste] of targetBatch.entries()) {
+        try {
+          if (targetPaste.storageKey)
+            await target.putPasteContent(
+              targetPaste.storageKey,
+              encoder.encode(batch[index]!.content),
+            );
+          await target.upsertPaste(targetPaste);
+          if (validateRecords) await validatePaste(target, batch[index]!, targetPaste);
+        } catch (error) {
+          if (error instanceof MigrationMismatchError) throw error;
+          throw new MigrationWriteError("paste", batch[index]!.id);
+        }
       }
     }
     const nextCursor = batch.at(-1)!.id;
@@ -244,6 +284,7 @@ const migratePastes = async (
 
 export interface MigrationOptions {
   batchSize?: number;
+  validateRecords?: boolean;
   validateTotals?: boolean;
   onProgress?: (progress: MigrationProgress) => void;
 }
@@ -256,16 +297,21 @@ export interface MigrationSummary {
 export const migrate = async (
   source: SourceAdapter,
   target: TargetAdapter,
-  { batchSize = 100, validateTotals = true, onProgress }: MigrationOptions = {},
+  {
+    batchSize = 100,
+    validateRecords = true,
+    validateTotals = true,
+    onProgress,
+  }: MigrationOptions = {},
 ): Promise<MigrationSummary> => {
   if (!Number.isSafeInteger(batchSize) || batchSize < 1)
     throw new Error("Migration batch size must be positive");
   const userTotal = await source.countUsers();
-  await migrateUsers(source, target, batchSize, userTotal, onProgress);
+  await migrateUsers(source, target, batchSize, userTotal, validateRecords, onProgress);
   if (validateTotals) await validateTotal(await target.countUsers(), userTotal, "users");
 
   const pasteTotal = await source.countPastes();
-  await migratePastes(source, target, batchSize, pasteTotal, onProgress);
+  await migratePastes(source, target, batchSize, pasteTotal, validateRecords, onProgress);
   if (validateTotals) await validateTotal(await target.countPastes(), pasteTotal, "pastes");
   return { users: userTotal, pastes: pasteTotal };
 };
@@ -493,6 +539,12 @@ const parseCursorId = (value: string, name: CursorName) => parseId(value, name.s
 interface D1Executor {
   query<T extends Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
   execute(sql: string, params?: unknown[]): Promise<void>;
+  batch(statements: readonly D1Statement[]): Promise<void>;
+}
+
+interface D1Statement {
+  sql: string;
+  params: unknown[];
 }
 
 interface CloudflareD1Options {
@@ -539,7 +591,89 @@ export class CloudflareD1 implements D1Executor {
   async execute(sql: string, params: unknown[] = []) {
     await this.query(sql, params);
   }
+
+  async batch(statements: readonly D1Statement[]) {
+    if (!statements.length) return;
+    const response = await this.fetch(
+      `${this.apiBaseUrl}/accounts/${this.options.accountId}/d1/database/${this.options.databaseId}/query`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.options.apiToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ batch: statements }),
+      },
+    );
+    const body = (await response.json()) as {
+      success?: boolean;
+      result?: Array<{ success?: boolean }>;
+    };
+    if (
+      !response.ok ||
+      !body.success ||
+      !body.result ||
+      body.result.length !== statements.length ||
+      body.result.some((result) => result.success === false)
+    )
+      throw new Error(`Cloudflare D1 batch failed (${response.status})`);
+  }
 }
+
+const userUpsertSql = `INSERT INTO users
+  (id, email, normalized_email, hashed_password, confirmed_at, inserted_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+  email = excluded.email,
+  normalized_email = excluded.normalized_email,
+  hashed_password = excluded.hashed_password,
+  confirmed_at = excluded.confirmed_at,
+  inserted_at = excluded.inserted_at,
+  updated_at = excluded.updated_at`;
+
+const userUpsert = (user: UserRecord): D1Statement => ({
+  sql: userUpsertSql,
+  params: [
+    user.id,
+    user.email,
+    user.normalizedEmail,
+    user.hashedPassword,
+    user.confirmedAt,
+    user.insertedAt,
+    user.updatedAt,
+  ],
+});
+
+const pasteUpsertSql = `INSERT INTO pastes
+  (id, content, is_url, owner_id, storage_type, storage_key,
+   content_length_bytes, content_sha256, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+  content = excluded.content,
+  is_url = excluded.is_url,
+  owner_id = excluded.owner_id,
+  storage_type = excluded.storage_type,
+  storage_key = excluded.storage_key,
+  content_length_bytes = excluded.content_length_bytes,
+  content_sha256 = excluded.content_sha256,
+  created_at = excluded.created_at,
+  updated_at = excluded.updated_at`;
+
+const pasteUpsert = (paste: TargetPasteRecord): D1Statement => ({
+  sql: pasteUpsertSql,
+  params: [
+    paste.id,
+    paste.content,
+    paste.isUrl ? 1 : 0,
+    paste.ownerId,
+    paste.storageType,
+    paste.storageKey,
+    paste.contentLengthBytes,
+    paste.contentSha256,
+    paste.insertedAt,
+    paste.updatedAt,
+  ],
+});
 
 const userFromRow = (row: Record<string, unknown>): UserRecord => ({
   id: parseId(row.id, "user"),
@@ -604,61 +738,35 @@ export class CloudflareTarget implements TargetAdapter {
   }
 
   async upsertUser(user: UserRecord) {
-    await this.db.execute(
-      `INSERT INTO users
-         (id, email, normalized_email, hashed_password, confirmed_at, inserted_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET
-         email = excluded.email,
-         normalized_email = excluded.normalized_email,
-         hashed_password = excluded.hashed_password,
-         confirmed_at = excluded.confirmed_at,
-         inserted_at = excluded.inserted_at,
-         updated_at = excluded.updated_at`,
-      [
-        user.id,
-        user.email,
-        user.normalizedEmail,
-        user.hashedPassword,
-        user.confirmedAt,
-        user.insertedAt,
-        user.updatedAt,
-      ],
-    );
+    const statement = userUpsert(user);
+    await this.db.execute(statement.sql, statement.params);
+  }
+
+  upsertUsers(users: readonly UserRecord[]) {
+    return this.db.batch(users.map(userUpsert));
   }
 
   async upsertPaste(paste: TargetPasteRecord) {
     const current = await this.getPaste(paste.id);
-    await this.db.execute(
-      `INSERT INTO pastes
-         (id, content, is_url, owner_id, storage_type, storage_key,
-          content_length_bytes, content_sha256, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET
-         content = excluded.content,
-         is_url = excluded.is_url,
-         owner_id = excluded.owner_id,
-         storage_type = excluded.storage_type,
-         storage_key = excluded.storage_key,
-         content_length_bytes = excluded.content_length_bytes,
-         content_sha256 = excluded.content_sha256,
-         created_at = excluded.created_at,
-         updated_at = excluded.updated_at`,
-      [
-        paste.id,
-        paste.content,
-        paste.isUrl ? 1 : 0,
-        paste.ownerId,
-        paste.storageType,
-        paste.storageKey,
-        paste.contentLengthBytes,
-        paste.contentSha256,
-        paste.insertedAt,
-        paste.updatedAt,
-      ],
-    );
+    const statement = pasteUpsert(paste);
+    await this.db.execute(statement.sql, statement.params);
     if (current?.storageKey && current.storageKey !== paste.storageKey)
       await this.objects.delete(current.storageKey);
+  }
+
+  async upsertPastes(pastes: readonly TargetPasteRecord[]) {
+    if (!pastes.length) return;
+    const placeholders = pastes.map(() => "?").join(", ");
+    const current = await this.db.query<{ id: string; storageKey: string | null }>(
+      `SELECT id, storage_key AS storageKey FROM pastes WHERE id IN (${placeholders})`,
+      pastes.map((paste) => paste.id),
+    );
+    const currentStorage = new Map(current.map((paste) => [paste.id, paste.storageKey]));
+    await this.db.batch(pastes.map(pasteUpsert));
+    for (const paste of pastes) {
+      const storageKey = currentStorage.get(paste.id);
+      if (storageKey && storageKey !== paste.storageKey) await this.objects.delete(storageKey);
+    }
   }
 
   deleteUser(id: number) {
@@ -673,6 +781,12 @@ export class CloudflareTarget implements TargetAdapter {
 
   putPasteContent(key: string, content: Uint8Array) {
     return this.objects.put(key, content);
+  }
+
+  putPasteContents(contents: readonly { key: string; content: Uint8Array }[]) {
+    return Promise.all(contents.map(({ key, content }) => this.objects.put(key, content))).then(
+      () => undefined,
+    );
   }
 
   async getUser(id: number) {
@@ -796,6 +910,7 @@ export const runConfiguredMigration = async () => {
     const startedAt = new Map<MigrationProgress["resource"], number>();
     return await migrate(source, target, {
       batchSize: configuredBatchSize,
+      validateRecords: process.env.MIGRATION_VALIDATE_RECORDS !== "false",
       validateTotals: process.env.MIGRATION_VALIDATE_TOTALS !== "false",
       onProgress: (progress) => {
         const start = startedAt.get(progress.resource) ?? Date.now();

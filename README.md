@@ -54,9 +54,10 @@ pnpm replication:install
 Run the initial copy with the relay stopped:
 
 ```sh
-MIGRATION_VALIDATE_TOTALS=false pnpm migrate
+MIGRATION_BATCH_SIZE=100 MIGRATION_VALIDATE_RECORDS=false MIGRATION_VALIDATE_TOTALS=false pnpm migrate
 ```
 
+This fast mode keeps batch and upload errors fatal. It skips per-row D1 readback validation.
 Each migration line reports the resource, processed rows, remaining rows, rate, and ETA.
 
 Start the relay after the copy completes:

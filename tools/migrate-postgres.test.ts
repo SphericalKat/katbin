@@ -8,6 +8,7 @@ import {
   type TargetPasteRecord,
   type UserRecord,
   type SourceAdapter,
+  CloudflareD1,
   migrate,
   MigrationMismatchError,
 } from "./migrate-postgres";
@@ -140,7 +141,56 @@ class FakeTarget implements TargetAdapter {
   }
 }
 
+class BulkTarget extends FakeTarget {
+  readonly userBatchSizes: number[] = [];
+  readonly pasteBatchSizes: number[] = [];
+
+  upsertUsers(values: readonly UserRecord[]) {
+    this.userBatchSizes.push(values.length);
+    values.forEach((value) => this.users.set(value.id, { ...value }));
+    return Promise.resolve();
+  }
+
+  upsertPastes(values: readonly TargetPasteRecord[]) {
+    this.pasteBatchSizes.push(values.length);
+    values.forEach((value) => this.pastes.set(value.id, { ...value }));
+    return Promise.resolve();
+  }
+}
+
 describe("PostgreSQL migration", () => {
+  it("sends D1 batch statements in one request", async () => {
+    const bodies: string[] = [];
+    const db = new CloudflareD1({
+      accountId: "account",
+      databaseId: "database",
+      apiToken: "token",
+      fetch: async (_input, init) => {
+        bodies.push(String(init?.body));
+        return new Response(
+          JSON.stringify({ success: true, result: [{ success: true }, { success: true }] }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      },
+    });
+
+    await db.batch([
+      { sql: "INSERT INTO users (id) VALUES (?)", params: [1] },
+      { sql: "INSERT INTO users (id) VALUES (?)", params: [2] },
+    ]);
+
+    expect(bodies).toHaveLength(1);
+    expect(JSON.parse(bodies[0])).toEqual({
+      batch: [
+        { sql: "INSERT INTO users (id) VALUES (?)", params: [1] },
+        { sql: "INSERT INTO users (id) VALUES (?)", params: [2] },
+      ],
+    });
+  });
+
   it("resumes an interrupted batch and does not reread completed user batches", async () => {
     const source = new FakeSource([user(1), user(2)], [paste("a", "a", 1), paste("b", "b", 2)]);
     const target = new FakeTarget("b");
@@ -156,6 +206,20 @@ describe("PostgreSQL migration", () => {
     expect(source.userCursors).toEqual([null, 2, 2]);
     expect(source.pasteCursors).toEqual([null, null, "b"]);
     expect(target.pastes.size).toBe(2);
+  });
+
+  it("uses bulk target writers when record validation is disabled", async () => {
+    const source = new FakeSource([user(1), user(2)], [paste("a", "a", 1), paste("b", "b", 2)]);
+    const target = new BulkTarget();
+
+    await expect(
+      migrate(source, target, { batchSize: 2, validateRecords: false }),
+    ).resolves.toEqual({
+      users: 2,
+      pastes: 2,
+    });
+    expect(target.userBatchSizes).toEqual([2]);
+    expect(target.pasteBatchSizes).toEqual([2]);
   });
 
   it("replays writes idempotently after the cursor is reset", async () => {
