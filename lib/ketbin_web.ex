@@ -19,10 +19,12 @@ defmodule KetbinWeb do
 
   def controller do
     quote do
-      use Phoenix.Controller, namespace: KetbinWeb
+      use Phoenix.Controller,
+        formats: [html: "View", json: "View"],
+        layouts: [html: KetbinWeb.LayoutView]
 
       import Plug.Conn
-      import KetbinWeb.Gettext
+      use Gettext, backend: KetbinWeb.Gettext
       alias KetbinWeb.Router.Helpers, as: Routes
     end
   end
@@ -54,20 +56,22 @@ defmodule KetbinWeb do
   def channel do
     quote do
       use Phoenix.Channel
-      import KetbinWeb.Gettext
+      use Gettext, backend: KetbinWeb.Gettext
     end
   end
 
   defp view_helpers do
     quote do
       # Use all HTML functionality (forms, tags, etc)
-      use Phoenix.HTML
+      import Phoenix.HTML
+      import Phoenix.HTML.Form
+      use PhoenixHTMLHelpers
 
       # Import basic rendering functionality (render, render_layout, etc)
       import Phoenix.View
 
       import KetbinWeb.ErrorHelpers
-      import KetbinWeb.Gettext
+      use Gettext, backend: KetbinWeb.Gettext
       alias KetbinWeb.Router.Helpers, as: Routes
     end
   end

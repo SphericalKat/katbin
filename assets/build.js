@@ -18,20 +18,25 @@ if (!productionBuild) {
   console.log("[build.js] [info] Building assets in production mode");
 }
 
-esbuild
-  .build({
-    entryPoints: ["js/app.js"],
-    bundle: true,
-    outfile: "../priv/static/assets/app.js",
-    minify: productionBuild,
-    watch: !productionBuild,
-    external: ["*.ttf"],
-    plugins: [
-      postCSSPlugin({
-        plugins: [postcssImport, tailwindcss, autoprefixer],
-      }),
-    ],
-  })
+const options = {
+  entryPoints: ["js/app.js"],
+  bundle: true,
+  outfile: "../priv/static/assets/app.js",
+  minify: productionBuild,
+  external: ["*.ttf"],
+  plugins: [
+    postCSSPlugin({
+      plugins: [postcssImport, tailwindcss, autoprefixer],
+      writeToFile: true,
+    }),
+  ],
+};
+
+const build = productionBuild
+  ? esbuild.build(options)
+  : esbuild.context(options).then((context) => context.watch());
+
+build
   .catch((e) => {
     console.error(`[build.js] [error] ${e}`);
     process.exit(1);

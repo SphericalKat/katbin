@@ -26,6 +26,7 @@ defmodule KetbinWeb.UserAuth do
   if you are not using LiveView.
   """
   def log_in_user(conn, user, params \\ %{}) do
+    conn = fetch_flash(conn)
     token = Accounts.generate_user_session_token(user)
     user_return_to = get_session(conn, :user_return_to)
 
@@ -34,7 +35,7 @@ defmodule KetbinWeb.UserAuth do
     |> put_session(:user_token, token)
     |> put_session(:live_socket_id, "users_sessions:#{Base.url_encode64(token)}")
     |> maybe_write_remember_me_cookie(token, params)
-    |> put_flash(:info, "Logged in successfully!")
+    |> put_flash(:info, Phoenix.Flash.get(conn.assigns.flash, :info) || "Logged in successfully!")
     |> redirect(to: user_return_to || signed_in_path(conn))
   end
 
@@ -170,7 +171,13 @@ defmodule KetbinWeb.UserAuth do
   end
 
   defp maybe_store_return_to(%{method: "GET"} = conn) do
-    put_session(conn, :user_return_to, current_path(conn))
+    path =
+      case conn.query_string do
+        "" -> conn.request_path
+        query_string -> conn.request_path <> "?" <> query_string
+      end
+
+    put_session(conn, :user_return_to, path)
   end
 
   defp maybe_store_return_to(conn), do: conn

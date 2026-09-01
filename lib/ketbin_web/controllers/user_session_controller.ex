@@ -22,7 +22,5 @@ defmodule KetbinWeb.UserSessionController do
     conn
     |> put_flash(:info, "Logged out successfully.")
     |> UserAuth.log_out_user()
-
-    conn
   end
 end
