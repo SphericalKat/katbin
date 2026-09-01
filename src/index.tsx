@@ -42,16 +42,12 @@ const SCRYPT_P = 1;
 const SCRYPT_KEY_LENGTH = 32;
 const consonants = "bcdfghjklmnpqrstvwxyz";
 const vowels = "aeiou";
+const idPattern = `(?:(?:[${consonants}][${vowels}]){5}[${consonants}]?|(?:[${vowels}][${consonants}]){5}[${vowels}]?)`;
 
 const idSchema = z.object({
-  id: z
-    .string()
-    .regex(
-      new RegExp(
-        `^(?:[${consonants}][${vowels}]){5}[${consonants}]?$|^(?:[${vowels}][${consonants}]){5}[${vowels}]?$`,
-      ),
-    ),
+  id: z.string().regex(new RegExp(`^${idPattern}$`)),
 });
+const pastePathSchema = z.object({ id: z.string().min(1).max(128) });
 const pasteFormSchema = z.object({ "paste[content]": z.string().min(1).max(MAX_BODY_BYTES) });
 const emailSchema = z.preprocess(
   (value) => (typeof value === "string" ? value : ""),
@@ -79,6 +75,27 @@ const loginFormSchema = z.object({
   "user[remember_me]": z.enum(["true"]).optional(),
 });
 const csrfFormSchema = z.object({ _csrf: z.string().min(1) });
+
+const isUrl = (value: string) => {
+  try {
+    const url = new URL(value);
+    return (
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      url.hostname.includes(".") &&
+      !url.hostname.includes("katb.in")
+    );
+  } catch {
+    return false;
+  }
+};
+
+const pastePath = (value: string) => {
+  const parsed = pastePathSchema.safeParse({ id: value });
+  if (!parsed.success) return null;
+  const [id, ...extensions] = parsed.data.id.split(".");
+  if (!idSchema.safeParse({ id }).success) return null;
+  return { id, extension: extensions.join(".") };
+};
 
 const dbFor = (env: Bindings) => drizzle(env.DB);
 const now = () => Math.floor(Date.now() / 1000);
@@ -403,6 +420,24 @@ const LoginPage: FC<{ csrf: string; error?: string }> = ({ csrf, error }) => (
   </>
 );
 
+const PastePage: FC<{ id: string; content: string }> = ({ id, content }) => (
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>{id} | Katbin</title>
+      <link rel="stylesheet" href={stylesheetUrl} />
+    </head>
+    <body class="flex h-full flex-col">
+      <Header />
+      <main class="h-full w-full overflow-y-auto bg-light-grey">
+        <pre class="break-word whitespace-pre-wrap px-6 py-4">{content}</pre>
+      </main>
+      <Footer />
+    </body>
+  </html>
+);
+
 export const app = new Hono<{ Bindings: Bindings }>();
 
 app.use("*", async (c, next) => {
@@ -621,51 +656,46 @@ app.post("/", async (c) => {
   if (!parsed.success) return c.json({ error: "Invalid input" }, 400);
   const id = generateId();
   const content = parsed.data["paste[content]"];
+  const urlPaste = isUrl(content);
   await dbFor(c.env)
     .insert(pastes)
-    .values({ id, content, contentLengthBytes: new TextEncoder().encode(content).byteLength });
-  return c.redirect(`/${id}`, 303);
+    .values({
+      id,
+      content,
+      isUrl: urlPaste,
+      contentLengthBytes: new TextEncoder().encode(content).byteLength,
+    });
+  return c.redirect(`${urlPaste ? "/v" : ""}/${id}`, 303);
 });
 
-app.get("/:id/raw", async (c) => {
-  const params = idSchema.safeParse(c.req.param());
-  if (!params.success) return c.text("Not found", 404);
+const findPaste = async (c: AppContext, value: string) => {
+  const path = pastePath(value);
+  if (!path) return null;
   const paste = await dbFor(c.env)
-    .select({ content: pastes.content })
+    .select({ id: pastes.id, content: pastes.content, isUrl: pastes.isUrl })
     .from(pastes)
-    .where(eq(pastes.id, params.data.id))
+    .where(eq(pastes.id, path.id))
     .get();
-  return paste
-    ? c.text(paste.content, 200, { "Content-Type": "text/plain; charset=UTF-8" })
-    : c.text("Not found", 404);
+  return paste ? { paste, extension: path.extension } : null;
+};
+
+app.get("/:id/raw", async (c) => {
+  const result = await findPaste(c, c.req.param("id"));
+  if (!result) return c.text("Not found", 404);
+  return c.text(result.paste.content, 200, { "Content-Type": "text/plain; charset=UTF-8" });
+});
+
+app.get("/v/:id", async (c) => {
+  const result = await findPaste(c, c.req.param("id"));
+  if (!result) return c.text("Not found", 404);
+  return c.html(<PastePage id={result.paste.id} content={result.paste.content} />);
 });
 
 app.get("/:id", async (c) => {
-  const params = idSchema.safeParse(c.req.param());
-  if (!params.success) return c.text("Not found", 404);
-  const paste = await dbFor(c.env)
-    .select({ id: pastes.id, content: pastes.content })
-    .from(pastes)
-    .where(eq(pastes.id, params.data.id))
-    .get();
-  if (!paste) return c.text("Not found", 404);
-  return c.html(
-    <html lang="en">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>{paste.id} | Katbin</title>
-        <link rel="stylesheet" href={stylesheetUrl} />
-      </head>
-      <body class="flex h-full flex-col">
-        <Header />
-        <main class="h-full w-full overflow-y-auto bg-light-grey">
-          <pre class="break-word whitespace-pre-wrap px-6 py-4">{paste.content}</pre>
-        </main>
-        <Footer />
-      </body>
-    </html>,
-  );
+  const result = await findPaste(c, c.req.param("id"));
+  if (!result) return c.text("Not found", 404);
+  if (result.paste.isUrl) return c.redirect(result.paste.content.replace(/[\r\n]/g, ""), 302);
+  return c.html(<PastePage id={result.paste.id} content={result.paste.content} />);
 });
 
 function generateId() {

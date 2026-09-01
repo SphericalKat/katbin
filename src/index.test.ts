@@ -83,6 +83,64 @@ describe("Katbin shell", () => {
     );
     expect(response.status).toBe(400);
   });
+
+  it("separates URL redirects, previews, text pastes, extensions, and mailto", async () => {
+    const db = new TestDatabase();
+    const home = await app.request("https://katb.in/", undefined, { DB: db } as never);
+    const cookie = cookieFrom(home)!;
+    const csrf = csrfFrom(await home.text());
+    const create = (content: string) =>
+      app.request(
+        "https://katb.in/",
+        formRequest(cookie, { _csrf: csrf, "paste[content]": content }),
+        { DB: db } as never,
+      );
+
+    const urlPaste = await create("https://example.com/docs");
+    const textPaste = await create("plain text");
+    const mailtoPaste = await create("mailto:user@example.com");
+    const urlId = new URL(urlPaste.headers.get("location")!, "https://katb.in").pathname.slice(3);
+    const textId = new URL(textPaste.headers.get("location")!, "https://katb.in").pathname.slice(1);
+    const mailtoId = new URL(
+      mailtoPaste.headers.get("location")!,
+      "https://katb.in",
+    ).pathname.slice(1);
+
+    expect(urlPaste.status).toBe(303);
+    expect(urlPaste.headers.get("location")).toBe(`/v/${urlId}`);
+    expect(textPaste.headers.get("location")).toBe(`/${textId}`);
+    expect(mailtoPaste.headers.get("location")).toBe(`/${mailtoId}`);
+
+    const redirect = await app.request(`https://katb.in/${urlId}`, undefined, { DB: db } as never);
+    const urlPreview = await app.request(`https://katb.in/v/${urlId}`, undefined, {
+      DB: db,
+    } as never);
+    const textPreview = await app.request(`https://katb.in/v/${textId}`, undefined, {
+      DB: db,
+    } as never);
+    const textDisplay = await app.request(`https://katb.in/${textId}.md`, undefined, {
+      DB: db,
+    } as never);
+    const textRaw = await app.request(`https://katb.in/${textId}.md/raw`, undefined, {
+      DB: db,
+    } as never);
+    const mailtoDisplay = await app.request(`https://katb.in/${mailtoId}`, undefined, {
+      DB: db,
+    } as never);
+
+    expect(redirect.status).toBe(302);
+    expect(redirect.headers.get("location")).toBe("https://example.com/docs");
+    expect(urlPreview.status).toBe(200);
+    expect(await urlPreview.text()).toContain("https://example.com/docs");
+    expect(textPreview.status).toBe(200);
+    expect(await textPreview.text()).toContain("plain text");
+    expect(textDisplay.status).toBe(200);
+    expect(await textDisplay.text()).toContain("plain text");
+    expect(textRaw.status).toBe(200);
+    expect(await textRaw.text()).toBe("plain text");
+    expect(mailtoDisplay.status).toBe(200);
+    expect(await mailtoDisplay.text()).toContain("mailto:user@example.com");
+  });
 });
 
 describe("account authentication", () => {
@@ -261,7 +319,7 @@ const formRequest = (cookie: string, values: Record<string, string>) => ({
 });
 
 class TestDatabase {
-  private readonly rows = new Map<string, { id: string; content: string }>();
+  private readonly rows = new Map<string, { id: string; content: string; is_url: boolean }>();
   private readonly userRows = new Map<
     number,
     {
@@ -325,8 +383,8 @@ class TestDatabase {
       bind: (...values: unknown[]) => ({
         run: async () => {
           if (normalized.includes('insert into "pastes"')) {
-            const [id, content] = values as [string, string];
-            this.rows.set(id, { id, content });
+            const [id, content, isUrl] = values as [string, string, boolean];
+            this.rows.set(id, { id, content, is_url: isUrl });
           } else if (normalized.includes('insert into "users"')) {
             const [email, normalizedEmail, hashedPassword] = values as [string, string, string];
             const id = this.nextUserId++;
@@ -407,9 +465,7 @@ class TestDatabase {
               : [];
           }
           const row = this.rows.get(values.at(-1) as string);
-          return row
-            ? [query.includes('select "content"') ? [row.content] : [row.id, row.content]]
-            : [];
+          return row ? [[row.id, row.content, row.is_url]] : [];
         },
       }),
     };
