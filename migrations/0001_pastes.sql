@@ -1,0 +1,11 @@
+CREATE TABLE IF NOT EXISTS pastes (
+  id TEXT PRIMARY KEY NOT NULL,
+  content TEXT NOT NULL,
+  is_url INTEGER NOT NULL DEFAULT 0,
+  owner_id INTEGER,
+  storage_type TEXT NOT NULL DEFAULT 'd1',
+  storage_key TEXT,
+  content_length_bytes INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
