@@ -1,14 +1,17 @@
-const alpine = window.Alpine;
+const registerAccountMenu = () => {
+  window.Alpine?.data("accountMenu", () => ({
+    open: false,
+    toggle() {
+      this.open = !this.open;
+    },
+    close() {
+      this.open = false;
+    },
+  }));
+};
 
-alpine?.data("accountMenu", () => ({
-  open: false,
-  toggle() {
-    this.open = !this.open;
-  },
-  close() {
-    this.open = false;
-  },
-}));
+if (window.Alpine) registerAccountMenu();
+else document.addEventListener("alpine:init", registerAccountMenu, { once: true });
 
 const setFormLoading = (form, loading) => {
   form.toggleAttribute("aria-busy", loading);

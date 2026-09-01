@@ -605,8 +605,8 @@ const Header: FC<{ csrf?: string; user?: User | null }> = ({ csrf, user }) => (
 
 const ClientScripts: FC = () => (
   <>
-    <script src={alpineUrl} defer />
     <script src={clientUrl} defer />
+    <script src={alpineUrl} defer />
   </>
 );
 
