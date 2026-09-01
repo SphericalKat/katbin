@@ -37,7 +37,7 @@ document.querySelectorAll("form").forEach((form) => {
       if (typeof value === "string") body.append(key, value);
     });
     void fetch(form.action, {
-      method: form.dataset.method,
+      method: form.dataset.method.toUpperCase(),
       body,
     })
       .then((response) => {
