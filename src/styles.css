@@ -45,6 +45,10 @@
     background-color: #1a1a1a;
   }
 
+  main {
+    background-color: #212121;
+  }
+
   textarea {
     font-size: 14px;
   }
