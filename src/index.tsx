@@ -532,8 +532,16 @@ const validCsrf = async (c: AppContext, token: string, form: Record<string, stri
 
 const FlashMessages: FC<{ info?: string; error?: string }> = ({ info, error }) => (
   <>
-    {info ? <p class="alert alert-info">{info}</p> : null}
-    {error ? <p class="alert alert-danger">{error}</p> : null}
+    {info ? (
+      <p class="alert alert-info" role="status">
+        {info}
+      </p>
+    ) : null}
+    {error ? (
+      <p class="alert alert-danger" role="alert">
+        {error}
+      </p>
+    ) : null}
   </>
 );
 
@@ -597,8 +605,8 @@ const Header: FC<{ csrf?: string; user?: User | null }> = ({ csrf, user }) => (
 
 const ClientScripts: FC = () => (
   <>
-    <script src={alpineUrl} />
-    <script src={clientUrl} />
+    <script src={alpineUrl} defer />
+    <script src={clientUrl} defer />
   </>
 );
 

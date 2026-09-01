@@ -10,8 +10,24 @@ alpine?.data("accountMenu", () => ({
   },
 }));
 
-document.querySelectorAll("form[data-method]").forEach((form) => {
+const setFormLoading = (form, loading) => {
+  form.toggleAttribute("aria-busy", loading);
+  form.dataset.submitting = String(loading);
+  const button = form.querySelector('button[type="submit"]');
+  button?.classList.toggle("is-loading", loading);
+  if (button) button.disabled = loading;
+};
+
+document.querySelectorAll("form").forEach((form) => {
   form.addEventListener("submit", (event) => {
+    if (form.dataset.submitting === "true") {
+      event.preventDefault();
+      return;
+    }
+    setFormLoading(form, true);
+
+    if (!form.dataset.method) return;
+
     event.preventDefault();
     const body = new URLSearchParams();
     new FormData(form).forEach((value, key) => {
@@ -20,9 +36,14 @@ document.querySelectorAll("form[data-method]").forEach((form) => {
     void fetch(form.action, {
       method: form.dataset.method,
       body,
-    }).then((response) => {
-      if (response.redirected) window.location.assign(response.url);
-    });
+    })
+      .then((response) => {
+        if (response.redirected) window.location.assign(response.url);
+        else setFormLoading(form, false);
+      })
+      .catch(() => {
+        setFormLoading(form, false);
+      });
   });
 });
 
