@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains_mono_variable.ttf");
+  font-weight: 100 1000;
+  font-stretch: 25% 151%;
+}
+
+@layer base {
+  * {
+    color: white;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 14px;
+    font-weight: bold;
+  }
+
+  html,
+  body {
+    height: 100%;
+    width: 100%;
+  }
+
+  a {
+    color: #ff9800;
+  }
+
+  a:hover {
+    color: #ff9800;
+    text-decoration: underline;
+  }
+
+  header {
+    background-color: #1a1a1a;
+  }
+
+  textarea {
+    font-size: 14px;
+  }
+}
+
+@layer utilities {
+  .bg-header {
+    background-color: #1a1a1a;
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "katbin-local",
+  "main": "./src/index.tsx",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "ENVIRONMENT": "local",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "katbin-local",
+      "database_id": "local",
+      "migrations_dir": "./migrations",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "PASTES",
+      "bucket_name": "katbin-local",
+    },
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "head_sampling_rate": 1,
+    },
+  },
+  "env": {
+    "staging": {
+      "name": "katbin-staging",
+      "vars": {
+        "ENVIRONMENT": "staging",
+      },
+      "routes": [
+        {
+          "pattern": "staging.katb.in",
+          "custom_domain": true,
+        },
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "katbin-staging",
+          "database_id": "575769c4-9491-4aee-a04b-a07ad0a903c8",
+          "migrations_dir": "./migrations",
+        },
+      ],
+      "r2_buckets": [
+        {
+          "binding": "PASTES",
+          "bucket_name": "katbin-staging",
+        },
+      ],
+    },
+    "production": {
+      "name": "katbin-production",
+      "vars": {
+        "ENVIRONMENT": "production",
+      },
+      "routes": [
+        {
+          "pattern": "katb.in",
+          "custom_domain": true,
+        },
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "katbin-production",
+          "database_id": "0a13c839-25d4-409f-9f19-5c2477b05bec",
+          "migrations_dir": "./migrations",
+        },
+      ],
+      "r2_buckets": [
+        {
+          "binding": "PASTES",
+          "bucket_name": "katbin-production",
+        },
+      ],
+    },
+  },
+}

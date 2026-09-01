@@ -1,0 +1,31 @@
+{
+  "name": "katbin",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev",
+    "check": "vp check src vite.config.ts",
+    "test": "vp test",
+    "build": "vp build",
+    "types": "vp exec tsc --noEmit"
+  },
+  "dependencies": {
+    "@alpinejs/csp": "3.17.1",
+    "hono": "4.13.5"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.54.2",
+    "@cloudflare/workers-types": "5.20260901.1",
+    "@types/node": "24.13.3",
+    "autoprefixer": "10.4.21",
+    "postcss": "8.5.6",
+    "tailwindcss": "3.4.19",
+    "typescript": "5.9.2",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.0",
+    "vite-plus": "0.3.0",
+    "vitest": "4.1.11",
+    "wrangler": "4.127.1"
+  },
+  "packageManager": "pnpm@10.24.0"
+}
