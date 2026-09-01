@@ -40,7 +40,7 @@
       "name": "katbin-staging",
       "vars": {
         "ENVIRONMENT": "staging",
-        "APPROVED_EMAIL_RECIPIENTS": "",
+        "APPROVED_EMAIL_RECIPIENTS": "amolele@gmail.com",
       },
       "send_email": [
         {
