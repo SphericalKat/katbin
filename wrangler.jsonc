@@ -6,7 +6,15 @@
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
     "ENVIRONMENT": "local",
+    "APPROVED_EMAIL_RECIPIENTS": "",
   },
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "allowed_sender_addresses": ["noreply@katb.in"],
+      "remote": false,
+    },
+  ],
   "d1_databases": [
     {
       "binding": "DB",
@@ -32,7 +40,15 @@
       "name": "katbin-staging",
       "vars": {
         "ENVIRONMENT": "staging",
+        "APPROVED_EMAIL_RECIPIENTS": "",
       },
+      "send_email": [
+        {
+          "name": "EMAIL",
+          "allowed_sender_addresses": ["noreply@katb.in"],
+          "remote": true,
+        },
+      ],
       "routes": [
         {
           "pattern": "staging.katb.in",
@@ -59,6 +75,13 @@
       "vars": {
         "ENVIRONMENT": "production",
       },
+      "send_email": [
+        {
+          "name": "EMAIL",
+          "allowed_sender_addresses": ["noreply@katb.in"],
+          "remote": true,
+        },
+      ],
       "routes": [
         {
           "pattern": "katb.in",

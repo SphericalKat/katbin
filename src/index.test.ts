@@ -293,6 +293,193 @@ describe("Katbin shell", () => {
 });
 
 describe("account authentication", () => {
+  it("delivers exact confirmation instructions and consumes the token once", async () => {
+    const db = new TestDatabase();
+    const email = new TestEmailBinding();
+    await loginAs(db, "user@example.com");
+    const page = await app.request("https://katb.in/users/confirm", undefined, {
+      DB: db,
+      EMAIL: email,
+    } as never);
+    const cookie = cookieFrom(page)!;
+    const response = await app.request(
+      "https://katb.in/users/confirm",
+      formRequest(cookie, {
+        _csrf: csrfFrom(await page.text()),
+        "user[email]": "user@example.com",
+      }),
+      { DB: db, EMAIL: email } as never,
+    );
+    const message = email.messages[0];
+    const token = message.text!.match(/\/users\/confirm\/([^\s]+)/)![1];
+
+    expect(response.status).toBe(303);
+    expect(message).toEqual({
+      to: "user@example.com",
+      from: "Katbin <noreply@katb.in>",
+      subject: "Account confirmation",
+      text: `
+
+==============================
+
+Hi user@example.com,
+
+You can confirm your account by visiting the URL below:
+
+https://katb.in/users/confirm/${token}
+
+If you didn't create an account with us, please ignore this.
+
+==============================
+`,
+    });
+
+    const confirmed = await app.request(`https://katb.in/users/confirm/${token}`, undefined, {
+      DB: db,
+      EMAIL: email,
+    } as never);
+    const repeated = await app.request(`https://katb.in/users/confirm/${token}`, undefined, {
+      DB: db,
+      EMAIL: email,
+    } as never);
+
+    expect(confirmed.status).toBe(302);
+    const confirmedHome = await app.request(
+      "https://katb.in/",
+      { headers: { Cookie: `${cookie}; ${cookieFrom(confirmed)}` } },
+      { DB: db } as never,
+    );
+    expect(await confirmedHome.text()).toContain("User confirmed successfully.");
+    expect(repeated.status).toBe(302);
+    expect(db.user("user@example.com")?.confirmed_at).not.toBeNull();
+    expect(db.accountTokenCount()).toBe(0);
+  });
+
+  it("keeps reset requests impartial and resets passwords with expiry and session revocation", async () => {
+    const db = new TestDatabase();
+    const email = new TestEmailBinding();
+    const auth = await loginAs(db, "user@example.com");
+    const requestPage = await app.request("https://katb.in/users/reset_password", undefined, {
+      DB: db,
+      EMAIL: email,
+    } as never);
+    const cookie = auth.cookie;
+    await requestPage.text();
+    const unknown = await app.request(
+      "https://katb.in/users/reset_password",
+      formRequest(cookie, {
+        _csrf: auth.csrf,
+        "user[email]": "unknown@example.com",
+      }),
+      { DB: db, EMAIL: email } as never,
+    );
+    expect(unknown.status).toBe(303);
+    expect(email.messages).toHaveLength(0);
+    const known = await app.request(
+      "https://katb.in/users/reset_password",
+      formRequest(cookie, {
+        _csrf: auth.csrf,
+        "user[email]": "user@example.com",
+      }),
+      { DB: db, EMAIL: email } as never,
+    );
+    let token = email.messages[0].text!.match(/\/users\/reset_password\/([^\s]+)/)![1];
+    db.expireAccountTokens();
+    const expired = await app.request(`https://katb.in/users/reset_password/${token}`, undefined, {
+      DB: db,
+      EMAIL: email,
+    } as never);
+    expect(expired.status).toBe(302);
+    await app.request(
+      "https://katb.in/users/reset_password",
+      formRequest(cookie, { _csrf: auth.csrf, "user[email]": "user@example.com" }),
+      { DB: db, EMAIL: email } as never,
+    );
+    token = email.messages[1].text!.match(/\/users\/reset_password\/([^\s]+)/)![1];
+    await app.request(`https://katb.in/users/reset_password/${token}`, undefined, {
+      DB: db,
+      EMAIL: email,
+    } as never);
+    const oldCookie = cookie;
+    const reset = await app.request(
+      `https://katb.in/users/reset_password/${token}`,
+      requestWithMethod("PUT", oldCookie, {
+        _csrf: auth.csrf,
+        "user[password]": "new password",
+        "user[password_confirmation]": "new password",
+      }),
+      { DB: db, EMAIL: email } as never,
+    );
+    const repeated = await app.request(`https://katb.in/users/reset_password/${token}`, undefined, {
+      DB: db,
+      EMAIL: email,
+    } as never);
+    expect(known.status).toBe(303);
+    expect(reset.status).toBe(303);
+    expect(reset.headers.get("location")).toBe("/users/log_in");
+    expect(repeated.headers.get("location")).toBe("/");
+    expect(
+      (
+        await app.request("https://katb.in/pastes", { headers: { Cookie: auth.cookie } }, {
+          DB: db,
+        } as never)
+      ).status,
+    ).toBe(302);
+    expect(db.accountTokenCount()).toBe(0);
+    expect(db.user("user@example.com")?.hashed_password).toMatch(/^scrypt\$/);
+  });
+
+  it("checks settings passwords and applies a confirmed email change", async () => {
+    const db = new TestDatabase();
+    const email = new TestEmailBinding();
+    const auth = await loginAs(db, "user@example.com");
+    const invalid = await app.request(
+      "https://katb.in/users/settings",
+      requestWithMethod("PUT", auth.cookie, {
+        _csrf: auth.csrf,
+        action: "update_email",
+        current_password: "wrong",
+        "user[email]": "new@example.com",
+      }),
+      { DB: db, EMAIL: email } as never,
+    );
+    expect(await invalid.text()).toContain("is not valid");
+    expect(email.messages).toHaveLength(0);
+
+    const update = await app.request(
+      "https://katb.in/users/settings",
+      requestWithMethod("PUT", auth.cookie, {
+        _csrf: auth.csrf,
+        action: "update_email",
+        current_password: "password",
+        "user[email]": "New@Example.com",
+      }),
+      { DB: db, EMAIL: email } as never,
+    );
+    const token = email.messages[0].text!.match(/\/users\/settings\/confirm_email\/([^\s]+)/)![1];
+    const confirmed = await app.request(
+      `https://katb.in/users/settings/confirm_email/${token}`,
+      { headers: { Cookie: auth.cookie } },
+      { DB: db, EMAIL: email } as never,
+    );
+    const settings = await app.request(
+      "https://katb.in/users/settings",
+      { headers: { Cookie: `${auth.cookie}; ${cookieFrom(confirmed)}` } },
+      { DB: db, EMAIL: email } as never,
+    );
+
+    expect(update.status).toBe(303);
+    expect(email.messages[0]).toMatchObject({
+      to: "New@Example.com",
+      from: "Katbin <noreply@katb.in>",
+      subject: "Email update requested",
+    });
+    expect(confirmed.status).toBe(302);
+    expect(await settings.text()).toContain("Email changed successfully.");
+    expect(db.user("user@example.com")).toBeUndefined();
+    expect(db.user("new@example.com")?.email).toBe("New@Example.com");
+  });
+
   it("registers with Phoenix validation and logs in before confirmation", async () => {
     const db = new TestDatabase();
     const page = await app.request("https://katb.in/users/register", undefined, {
@@ -471,6 +658,15 @@ const checksum = async (content: string) =>
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
 
+class TestEmailBinding {
+  readonly messages: Array<{ to: string; from: string; subject: string; text?: string }> = [];
+
+  async send(message: { to: string; from: string; subject: string; text?: string }) {
+    this.messages.push(message);
+    return { messageId: String(this.messages.length) };
+  }
+}
+
 class TestDatabase {
   private readonly rows = new Map<
     string,
@@ -500,6 +696,10 @@ class TestDatabase {
   private readonly sessionRows = new Map<
     string,
     { token_hash: string; user_id: number | null; expires_at: number; inserted_at: number }
+  >();
+  private readonly accountTokenRows = new Map<
+    string,
+    { token_hash: string; user_id: number; context: string; sent_to: string; inserted_at: number }
   >();
   private nextUserId = 1;
 
@@ -541,6 +741,14 @@ class TestDatabase {
 
   sessionCount() {
     return this.sessionRows.size;
+  }
+
+  accountTokenCount() {
+    return this.accountTokenRows.size;
+  }
+
+  expireAccountTokens() {
+    for (const token of this.accountTokenRows.values()) token.inserted_at = 0;
   }
 
   paste(id: string) {
@@ -624,12 +832,51 @@ class TestDatabase {
               expires_at: expiresAt,
               inserted_at: insertedAt,
             });
+          } else if (normalized.includes('insert into "account_tokens"')) {
+            const [tokenHash, userId, context, sentTo, insertedAt] = values as [
+              string,
+              number,
+              string,
+              string,
+              number,
+            ];
+            this.accountTokenRows.set(tokenHash, {
+              token_hash: tokenHash,
+              user_id: userId,
+              context,
+              sent_to: sentTo,
+              inserted_at: insertedAt,
+            });
           } else if (normalized.startsWith('update "users"')) {
-            const [hashedPassword, id] = values as [string, number];
+            const id = values.at(-1) as number;
             const user = this.userRows.get(id);
-            if (user) user.hashed_password = hashedPassword;
+            if (user) {
+              if (normalized.includes("hashed_password")) {
+                const hashedPassword = values.find(
+                  (value) => typeof value === "string" && String(value).startsWith("scrypt$"),
+                );
+                if (hashedPassword) user.hashed_password = hashedPassword as string;
+              }
+              if (normalized.includes("normalized_email")) {
+                user.email = values[0] as string;
+                user.normalized_email = values[1] as string;
+              }
+              if (normalized.includes("confirmed_at")) user.confirmed_at = values[0] as string;
+            }
           } else if (normalized.startsWith('delete from "sessions"')) {
-            this.sessionRows.delete(values[0] as string);
+            if (normalized.includes("user_id")) {
+              for (const [tokenHash, session] of this.sessionRows)
+                if (session.user_id === values[0]) this.sessionRows.delete(tokenHash);
+            } else {
+              this.sessionRows.delete(values[0] as string);
+            }
+          } else if (normalized.startsWith('delete from "account_tokens"')) {
+            if (normalized.includes("user_id")) {
+              for (const [tokenHash, token] of this.accountTokenRows)
+                if (token.user_id === values[0]) this.accountTokenRows.delete(tokenHash);
+            } else {
+              this.accountTokenRows.delete(values[0] as string);
+            }
           } else if (normalized.startsWith('update "pastes"')) {
             const [
               content,
@@ -656,6 +903,23 @@ class TestDatabase {
           return { success: true };
         },
         all: async () => {
+          if (normalized.startsWith('delete from "account_tokens"')) {
+            const tokenHash = values.find((value) => typeof value === "string") as string;
+            const token = this.accountTokenRows.get(tokenHash);
+            const context = values.find(
+              (value) => typeof value === "string" && value !== tokenHash,
+            ) as string | undefined;
+            const currentTime = values.find((value) => typeof value === "number") as number;
+            const matches =
+              token &&
+              (!context ||
+                (context.endsWith("%")
+                  ? token.context.startsWith("change:")
+                  : token.context === context)) &&
+              (!currentTime || token.inserted_at > currentTime);
+            if (matches) this.accountTokenRows.delete(tokenHash);
+            return { results: matches ? [token] : [] };
+          }
           if (normalized.includes('from "users"')) {
             const lookup = values[0];
             const user =
@@ -668,6 +932,22 @@ class TestDatabase {
             );
             const currentTime = values.find((value) => typeof value === "number") as number;
             return { results: session && session.expires_at > currentTime ? [session] : [] };
+          }
+          if (normalized.includes('from "account_tokens"')) {
+            const tokenHash = values.find((value) => typeof value === "string") as string;
+            const token = this.accountTokenRows.get(tokenHash);
+            const context = values.find(
+              (value) => typeof value === "string" && value !== tokenHash,
+            ) as string | undefined;
+            const currentTime = values.find((value) => typeof value === "number") as number;
+            const matches =
+              token &&
+              (!context ||
+                (context.endsWith("%")
+                  ? token.context.startsWith("change:")
+                  : token.context === context)) &&
+              token.inserted_at > currentTime;
+            return { results: matches ? [token] : [] };
           }
           if (normalized.includes('from "pastes"')) {
             const id = values.find((value) => typeof value === "string");
@@ -685,6 +965,25 @@ class TestDatabase {
           return { results: [] };
         },
         raw: async () => {
+          if (normalized.startsWith('delete from "account_tokens"')) {
+            const tokenHash = values.find((value) => typeof value === "string") as string;
+            const token = this.accountTokenRows.get(tokenHash);
+            const context = values.find(
+              (value) => typeof value === "string" && value !== tokenHash,
+            ) as string | undefined;
+            const currentTime = values.find((value) => typeof value === "number") as number;
+            const matches =
+              token &&
+              (!context ||
+                (context.endsWith("%")
+                  ? token.context.startsWith("change:")
+                  : token.context === context)) &&
+              token.inserted_at > currentTime;
+            if (matches) this.accountTokenRows.delete(tokenHash);
+            return matches
+              ? [[token.token_hash, token.user_id, token.context, token.sent_to, token.inserted_at]]
+              : [];
+          }
           if (normalized.includes('from "sessions"')) {
             const session = this.sessionRows.get(
               values.find((value) => typeof value === "string") as string,
@@ -710,6 +1009,24 @@ class TestDatabase {
                     user.updated_at,
                   ],
                 ]
+              : [];
+          }
+          if (normalized.includes('from "account_tokens"')) {
+            const tokenHash = values.find((value) => typeof value === "string") as string;
+            const token = this.accountTokenRows.get(tokenHash);
+            const context = values.find(
+              (value) => typeof value === "string" && value !== tokenHash,
+            ) as string | undefined;
+            const currentTime = values.find((value) => typeof value === "number") as number;
+            const matches =
+              token &&
+              (!context ||
+                (context.endsWith("%")
+                  ? token.context.startsWith("change:")
+                  : token.context === context)) &&
+              token.inserted_at > currentTime;
+            return matches
+              ? [[token.token_hash, token.user_id, token.context, token.sent_to, token.inserted_at]]
               : [];
           }
           if (normalized.includes('from "pastes"')) {

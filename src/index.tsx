@@ -3,7 +3,7 @@ import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { raw } from "hono/html";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, like } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import bcrypt from "bcryptjs";
 import hljs from "highlight.js/lib/common";
@@ -15,7 +15,7 @@ import sanitizeHtml from "sanitize-html";
 import { z } from "zod";
 
 import clientUrl from "./client.ts?url";
-import { pastes, sessions, users } from "./db/schema";
+import { accountTokens, pastes, sessions, users } from "./db/schema";
 import stylesheetUrl from "./styles.css?url";
 
 const securityHeaders = {
@@ -94,7 +94,9 @@ const PasteContent: FC<{ content: string; extension: string }> = ({ content, ext
 
 type Bindings = {
   DB: D1Database;
+  EMAIL?: SendEmail;
   ENVIRONMENT: string;
+  APPROVED_EMAIL_RECIPIENTS?: string;
   PASTES: R2Bucket;
 };
 type AppContext = Context<{ Bindings: Bindings }>;
@@ -106,11 +108,14 @@ const MAX_BODY_BYTES = 10_000_000;
 const R2_THRESHOLD_BYTES = 1_000_000;
 const SESSION_COOKIE = "__Host-katbin_session";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 60;
+const CONFIRMATION_MAX_AGE = 60 * 60 * 24 * 7;
+const RESET_PASSWORD_MAX_AGE = 60 * 60 * 24;
 const SCRYPT_N = 16_384;
 const SCRYPT_R = 8;
 const SCRYPT_P = 1;
 const SCRYPT_KEY_LENGTH = 32;
 const FLASH_COOKIE = "__Host-katbin_flash";
+const INFO_FLASH_COOKIE = "__Host-katbin_info_flash";
 const OWNERSHIP_ERROR = "You don't own this paste!";
 const consonants = "bcdfghjklmnpqrstvwxyz";
 const vowels = "aeiou";
@@ -144,6 +149,11 @@ const loginFormSchema = z.object({
   "user[password]": z.preprocess((value) => (typeof value === "string" ? value : ""), z.string()),
   "user[remember_me]": z.enum(["true"]).optional(),
 });
+const emailRequestFormSchema = z.object({ "user[email]": emailSchema });
+const passwordChangeFormSchema = z.object({
+  "user[password]": passwordSchema,
+  "user[password_confirmation]": z.string(),
+});
 const csrfFormSchema = z.object({ _csrf: z.string().min(1) });
 const customIdSchema = z.string().regex(customIdPattern);
 
@@ -170,6 +180,14 @@ const pastePath = (value: string) => {
 
 const dbFor = (env: Bindings) => drizzle(env.DB);
 const now = () => Math.floor(Date.now() / 1000);
+
+const CONFIRMATION_MESSAGE =
+  "If your email is in our system and it has not been confirmed yet, you will receive an email with instructions shortly.";
+const RESET_PASSWORD_MESSAGE =
+  "If your email is in our system, you will receive instructions to reset your password shortly.";
+const INVALID_CONFIRMATION_MESSAGE = "User confirmation link is invalid or it has expired.";
+const INVALID_RESET_MESSAGE = "Reset password link is invalid or it has expired.";
+const INVALID_EMAIL_CHANGE_MESSAGE = "Email change link is invalid or it has expired.";
 
 const encodeBase64Url = (bytes: Uint8Array) =>
   btoa(String.fromCharCode(...bytes))
@@ -267,21 +285,29 @@ const sessionFromRequest = async (c: AppContext) => {
   return { token, session: token ? ((await sessionFromToken(c.env, token)) ?? null) : null };
 };
 
-const ownershipError = (c: AppContext, id: string) => {
-  setCookie(c, FLASH_COOKIE, OWNERSHIP_ERROR, {
+const setFlash = (c: AppContext, type: "error" | "info", message: string) => {
+  setCookie(c, type === "error" ? FLASH_COOKIE : INFO_FLASH_COOKIE, message, {
     httpOnly: true,
     sameSite: "Lax",
     secure: true,
     path: "/",
   });
+};
+
+const takeTypedFlash = (c: AppContext, type: "error" | "info") => {
+  const name = type === "error" ? FLASH_COOKIE : INFO_FLASH_COOKIE;
+  const flash = getCookie(c, name);
+  if (flash) deleteCookie(c, name, { httpOnly: true, sameSite: "Lax", secure: true, path: "/" });
+  return flash;
+};
+
+const ownershipError = (c: AppContext, id: string) => {
+  setFlash(c, "error", OWNERSHIP_ERROR);
   return c.redirect(`/${encodeURIComponent(id)}`, 302);
 };
 
 const takeFlash = (c: AppContext) => {
-  const flash = getCookie(c, FLASH_COOKIE);
-  if (flash)
-    deleteCookie(c, FLASH_COOKIE, { httpOnly: true, sameSite: "Lax", secure: true, path: "/" });
-  return flash;
+  return takeTypedFlash(c, "error");
 };
 
 const hashPassword = (password: string) => {
@@ -326,6 +352,174 @@ const verifyPassword = async (password: string, stored: string) => {
   return false;
 };
 
+const accountTokenMaxAge = (context: string) =>
+  context === "reset_password" ? RESET_PASSWORD_MAX_AGE : CONFIRMATION_MAX_AGE;
+
+const approvedEmailRecipients = (env: Bindings) =>
+  (env.APPROVED_EMAIL_RECIPIENTS ?? "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+
+const canSendEmail = (env: Bindings, recipient: string) =>
+  env.ENVIRONMENT !== "staging" || approvedEmailRecipients(env).includes(recipient.toLowerCase());
+
+const confirmationBody = (email: string, url: string) => `
+
+==============================
+
+Hi ${email},
+
+You can confirm your account by visiting the URL below:
+
+${url}
+
+If you didn't create an account with us, please ignore this.
+
+==============================
+`;
+
+const resetPasswordBody = (email: string, url: string) => `
+
+==============================
+
+Hi ${email},
+
+You can reset your password by visiting the URL below:
+
+${url}
+
+If you didn't request this change, please ignore this.
+
+==============================
+`;
+
+const emailChangeBody = (email: string, url: string) => `
+
+==============================
+
+Hi ${email},
+
+You can change your email by visiting the URL below:
+
+${url}
+
+If you didn't request this change, please ignore this.
+
+==============================
+`;
+
+const deliverAccountEmail = async (
+  env: Bindings,
+  userId: number,
+  recipient: string,
+  context: string,
+  subject: string,
+  body: (url: string) => string,
+  url: string,
+) => {
+  if (!env.EMAIL || !canSendEmail(env, recipient)) return false;
+  const token = encodeBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+  const tokenHash = await hashToken(token);
+  const db = dbFor(env);
+  await db.insert(accountTokens).values({
+    tokenHash,
+    userId,
+    context,
+    sentTo: recipient,
+    insertedAt: now(),
+  });
+  try {
+    await env.EMAIL.send({
+      to: recipient,
+      from: "Katbin <noreply@katb.in>",
+      subject,
+      text: body(`${url}/${token}`),
+    });
+  } catch (error) {
+    await db.delete(accountTokens).where(eq(accountTokens.tokenHash, tokenHash));
+    throw error;
+  }
+  return true;
+};
+
+const consumeAccountToken = async (env: Bindings, token: string, context: string) => {
+  try {
+    decodeBase64Url(token);
+  } catch {
+    return null;
+  }
+  const tokenHash = await hashToken(token);
+  const contextFilter =
+    context === "change_email"
+      ? like(accountTokens.context, "change:%")
+      : eq(accountTokens.context, context);
+  return dbFor(env)
+    .delete(accountTokens)
+    .where(
+      and(
+        eq(accountTokens.tokenHash, tokenHash),
+        contextFilter,
+        gt(accountTokens.insertedAt, now() - accountTokenMaxAge(context)),
+      ),
+    )
+    .returning()
+    .get();
+};
+
+const findAccountToken = async (env: Bindings, token: string, context: string) => {
+  try {
+    decodeBase64Url(token);
+  } catch {
+    return null;
+  }
+  const contextFilter =
+    context === "change_email"
+      ? like(accountTokens.context, "change:%")
+      : eq(accountTokens.context, context);
+  return dbFor(env)
+    .select()
+    .from(accountTokens)
+    .where(
+      and(
+        eq(accountTokens.tokenHash, await hashToken(token)),
+        contextFilter,
+        gt(accountTokens.insertedAt, now() - accountTokenMaxAge(context)),
+      ),
+    )
+    .get();
+};
+
+const revokeUserAccess = async (env: Bindings, userId: number) => {
+  const db = dbFor(env);
+  await db.delete(sessions).where(eq(sessions.userId, userId));
+  await db.delete(accountTokens).where(eq(accountTokens.userId, userId));
+};
+
+const getBrowserSession = async (c: AppContext) => {
+  let token = getCookie(c, SESSION_COOKIE);
+  let session = token ? await sessionFromToken(c.env, token) : null;
+  if (!session) {
+    const created = await createSession(c.env, null);
+    token = created.token;
+    session = created.session;
+    setSessionCookie(c, token);
+  }
+  return { token: token!, session };
+};
+
+const validCsrf = async (c: AppContext, token: string, form: Record<string, string>) => {
+  const csrf = csrfFormSchema.safeParse(form);
+  return csrf.success && sameValue(csrf.data._csrf, await csrfToken(token));
+};
+
+const FlashMessages: FC<{ info?: string; error?: string }> = ({ info, error }) => (
+  <>
+    {info ? <p class="alert alert-info">{info}</p> : null}
+    {error ? <p class="alert alert-danger">{error}</p> : null}
+  </>
+);
+
 const Header: FC<{ csrf?: string; user?: User | null }> = ({ csrf, user }) => (
   <header class="flex w-full items-center justify-between px-6 py-3">
     <a href="/">
@@ -338,6 +532,7 @@ const Header: FC<{ csrf?: string; user?: User | null }> = ({ csrf, user }) => (
         <div class="flex items-center gap-4">
           <span class="text-amber">{user.email}</span>
           <a href="/pastes">My Pastes</a>
+          <a href="/users/settings">Settings</a>
           {csrf ? (
             <form action="/users/log_out" method="post" data-method="delete">
               <input type="hidden" name="_csrf" value={csrf} />
@@ -368,10 +563,16 @@ const Footer: FC = () => (
   </footer>
 );
 
-const Home: FC<{ csrf: string; user: User | null }> = ({ csrf, user }) => (
+const Home: FC<{ csrf: string; user: User | null; info?: string; error?: string }> = ({
+  csrf,
+  user,
+  info,
+  error,
+}) => (
   <>
     <Header csrf={csrf} user={user} />
     <main class="flex h-full max-h-full w-full flex-col overflow-hidden bg-light-grey">
+      <FlashMessages info={info} error={error} />
       <form class="relative flex h-full w-full flex-col" action="/" method="post">
         <input type="hidden" name="_csrf" value={csrf} />
         <div class="h-full w-full">
@@ -528,6 +729,249 @@ const LoginPage: FC<{ csrf: string; error?: string }> = ({ csrf, error }) => (
   </>
 );
 
+const ConfirmationPage: FC<{ csrf: string }> = ({ csrf }) => (
+  <>
+    <Header />
+    <main class="flex h-full w-full flex-col items-center justify-center">
+      <h1 class="pt-4 text-4xl font-bold text-amber">Resend confirmation instructions</h1>
+      <form
+        action="/users/confirm"
+        method="post"
+        class="m-auto flex h-full flex-col items-start justify-center"
+      >
+        <input type="hidden" name="_csrf" value={csrf} />
+        <label class="flex w-full flex-col" htmlFor="confirmation-email">
+          Email
+          <input
+            id="confirmation-email"
+            name="user[email]"
+            type="email"
+            class="px-2 py-1 text-black outline-none"
+            required
+          />
+        </label>
+        <button type="submit" class="mt-4 rounded-sm bg-amber px-2 py-1">
+          Resend confirmation instructions
+        </button>
+      </form>
+      <p class="mb-4 text-amber">
+        <a href="/users/register">Register</a> | <a href="/users/log_in">Log in</a>
+      </p>
+    </main>
+    <Footer />
+  </>
+);
+
+const ResetPasswordRequestPage: FC<{ csrf: string }> = ({ csrf }) => (
+  <>
+    <Header />
+    <main class="flex h-full w-full flex-col items-center justify-center">
+      <h1 class="pt-4 text-4xl font-bold text-amber">Forgot your password?</h1>
+      <form
+        action="/users/reset_password"
+        method="post"
+        class="m-auto flex h-full flex-col items-start justify-center"
+      >
+        <input type="hidden" name="_csrf" value={csrf} />
+        <label class="flex w-full flex-col" htmlFor="reset-email">
+          Email
+          <input
+            id="reset-email"
+            name="user[email]"
+            type="email"
+            class="px-2 py-1 text-black outline-none"
+            required
+          />
+        </label>
+        <button type="submit" class="mt-4 rounded-sm bg-amber px-2 py-1">
+          Send instructions to reset password
+        </button>
+      </form>
+      <p class="mb-4 text-amber">
+        <a href="/users/register">Register</a> | <a href="/users/log_in">Log in</a>
+      </p>
+    </main>
+    <Footer />
+  </>
+);
+
+const ResetPasswordPage: FC<{ csrf: string; token: string; errors?: FormErrors }> = ({
+  csrf,
+  token,
+  errors = {},
+}) => (
+  <>
+    <Header />
+    <main class="flex h-full w-full flex-col items-center justify-center">
+      <h1 class="pt-4 text-4xl font-bold text-amber">Reset password</h1>
+      <form
+        action={`/users/reset_password/${token}`}
+        method="post"
+        data-method="put"
+        class="m-auto flex h-full flex-col items-start justify-center"
+      >
+        <input type="hidden" name="_csrf" value={csrf} />
+        {Object.keys(errors).length ? (
+          <div class="alert alert-danger">
+            <p>Oops, something went wrong! Please check the errors below.</p>
+          </div>
+        ) : null}
+        <label class="flex w-full flex-col" htmlFor="reset-password">
+          New password
+          <input
+            id="reset-password"
+            name="user[password]"
+            type="password"
+            class="px-2 py-1 text-black outline-none"
+            required
+          />
+          {errors.password?.map((error) => (
+            <span class="text-red-600">{error}</span>
+          ))}
+        </label>
+        <label class="mt-2 flex w-full flex-col" htmlFor="reset-password-confirmation">
+          Confirm new password
+          <input
+            id="reset-password-confirmation"
+            name="user[password_confirmation]"
+            type="password"
+            class="px-2 py-1 text-black outline-none"
+            required
+          />
+          {errors.password_confirmation?.map((error) => (
+            <span class="text-red-600">{error}</span>
+          ))}
+        </label>
+        <button type="submit" class="mt-4 rounded-sm bg-amber px-2 py-1">
+          Reset password
+        </button>
+      </form>
+      <p class="mb-4 text-amber">
+        <a href="/users/register">Register</a> | <a href="/users/log_in">Log in</a>
+      </p>
+    </main>
+    <Footer />
+  </>
+);
+
+const SettingsPage: FC<{
+  csrf: string;
+  user: User;
+  emailErrors?: FormErrors;
+  passwordErrors?: FormErrors;
+}> = ({ csrf, user, emailErrors = {}, passwordErrors = {} }) => (
+  <>
+    <Header csrf={csrf} user={user} />
+    <main class="flex h-full w-full flex-col items-center">
+      <h1 class="w-full pt-4 text-center text-4xl font-bold text-amber">Settings</h1>
+      <div class="flex h-full w-full items-center justify-center">
+        <form
+          action="/users/settings"
+          method="post"
+          data-method="put"
+          class="m-auto flex h-full flex-col items-start justify-center"
+        >
+          <h2 class="pb-4 text-2xl font-bold text-amber">Change email</h2>
+          <input type="hidden" name="_csrf" value={csrf} />
+          <input type="hidden" name="action" value="update_email" />
+          {Object.keys(emailErrors).length ? (
+            <div class="alert alert-danger">
+              <p>Oops, something went wrong! Please check the errors below.</p>
+            </div>
+          ) : null}
+          <label class="flex w-full flex-col" htmlFor="settings-email">
+            Email
+            <input
+              id="settings-email"
+              name="user[email]"
+              type="email"
+              class="px-2 py-1 text-black outline-none"
+              required
+            />
+            {emailErrors.email?.map((error) => (
+              <span class="text-red-600">{error}</span>
+            ))}
+          </label>
+          <label class="mt-2 flex w-full flex-col" htmlFor="settings-email-password">
+            Current password
+            <input
+              id="settings-email-password"
+              name="current_password"
+              type="password"
+              class="px-2 py-1 text-black outline-none"
+              required
+            />
+            {emailErrors.current_password?.map((error) => (
+              <span class="text-red-600">{error}</span>
+            ))}
+          </label>
+          <button type="submit" class="mt-4 rounded-sm bg-amber px-2 py-1">
+            Change email
+          </button>
+        </form>
+        <form
+          action="/users/settings"
+          method="post"
+          data-method="put"
+          class="m-auto flex h-full flex-col items-start justify-center"
+        >
+          <h2 class="pb-4 text-2xl font-bold text-amber">Change password</h2>
+          <input type="hidden" name="_csrf" value={csrf} />
+          <input type="hidden" name="action" value="update_password" />
+          {Object.keys(passwordErrors).length ? (
+            <div class="alert alert-danger">
+              <p>Oops, something went wrong! Please check the errors below.</p>
+            </div>
+          ) : null}
+          <label class="flex w-full flex-col" htmlFor="settings-password">
+            New password
+            <input
+              id="settings-password"
+              name="user[password]"
+              type="password"
+              class="px-2 py-1 text-black outline-none"
+              required
+            />
+            {passwordErrors.password?.map((error) => (
+              <span class="text-red-600">{error}</span>
+            ))}
+          </label>
+          <label class="mt-2 flex w-full flex-col" htmlFor="settings-password-confirmation">
+            Confirm new password
+            <input
+              id="settings-password-confirmation"
+              name="user[password_confirmation]"
+              type="password"
+              class="px-2 py-1 text-black outline-none"
+              required
+            />
+            {passwordErrors.password_confirmation?.map((error) => (
+              <span class="text-red-600">{error}</span>
+            ))}
+          </label>
+          <label class="mt-2 flex w-full flex-col" htmlFor="settings-password-current">
+            Current password
+            <input
+              id="settings-password-current"
+              name="current_password"
+              type="password"
+              class="px-2 py-1 text-black outline-none"
+              required
+            />
+            {passwordErrors.current_password?.map((error) => (
+              <span class="text-red-600">{error}</span>
+            ))}
+          </label>
+          <button type="submit" class="mt-4 rounded-sm bg-amber px-2 py-1">
+            Change password
+          </button>
+        </form>
+      </div>
+    </main>
+    <Footer />
+  </>
+);
+
 const PastePage: FC<{
   id: string;
   content: string;
@@ -668,7 +1112,12 @@ app.get("/", async (c) => {
         <script type="module" src={clientUrl} />
       </head>
       <body class="flex h-full flex-col">
-        <Home csrf={await csrfToken(token!)} user={user} />
+        <Home
+          csrf={await csrfToken(token!)}
+          user={user}
+          info={takeTypedFlash(c, "info")}
+          error={takeTypedFlash(c, "error")}
+        />
       </body>
     </html>,
   );
@@ -748,15 +1197,192 @@ app.post("/users/register", async (c) => {
     throw error;
   }
   const user = await db
-    .select({ id: users.id })
+    .select({ id: users.id, email: users.email })
     .from(users)
     .where(eq(users.normalizedEmail, normalizedEmail))
     .get();
   if (!user) throw new Error("registered user was not returned");
+  await deliverAccountEmail(
+    c.env,
+    user.id,
+    user.email,
+    "confirm",
+    "Account confirmation",
+    (url) => confirmationBody(user.email, url),
+    `${new URL(c.req.url).origin}/users/confirm`,
+  );
   const created = await createSession(c.env, user.id);
   await db.delete(sessions).where(eq(sessions.tokenHash, await hashToken(token)));
   setSessionCookie(c, created.token);
   return c.redirect("/users/confirm", 303);
+});
+
+app.get("/users/confirm", async (c) => {
+  const { token } = await getBrowserSession(c);
+  return c.html(
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Confirm account | Katbin</title>
+        <link rel="stylesheet" href={stylesheetUrl} />
+      </head>
+      <body class="flex h-full flex-col">
+        <ConfirmationPage csrf={await csrfToken(token)} />
+      </body>
+    </html>,
+  );
+});
+
+app.post("/users/confirm", async (c) => {
+  if (!sameOrigin(c.req.raw)) return c.json({ error: "Forbidden" }, 403);
+  const token = getCookie(c, SESSION_COOKIE);
+  const session = token ? await sessionFromToken(c.env, token) : null;
+  if (!token || !session) return c.json({ error: "Forbidden" }, 403);
+  const form = await parseForm(c.req.raw);
+  if (!(await validCsrf(c, token, form))) return c.json({ error: "Forbidden" }, 403);
+  const parsed = emailRequestFormSchema.safeParse(form);
+  if (parsed.success) {
+    const email = parsed.data["user[email]"];
+    const user = await dbFor(c.env)
+      .select()
+      .from(users)
+      .where(eq(users.normalizedEmail, email.toLowerCase()))
+      .get();
+    if (user && !user.confirmedAt)
+      await deliverAccountEmail(
+        c.env,
+        user.id,
+        user.email,
+        "confirm",
+        "Account confirmation",
+        (url) => confirmationBody(user.email, url),
+        `${new URL(c.req.url).origin}/users/confirm`,
+      );
+  }
+  setFlash(c, "info", CONFIRMATION_MESSAGE);
+  return c.redirect("/", 303);
+});
+
+app.get("/users/confirm/:token", async (c) => {
+  const consumed = await consumeAccountToken(c.env, c.req.param("token"), "confirm");
+  if (consumed) {
+    await dbFor(c.env)
+      .update(users)
+      .set({ confirmedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
+      .where(eq(users.id, consumed.userId));
+    setFlash(c, "info", "User confirmed successfully.");
+    return c.redirect("/", 302);
+  }
+  const { session } = await sessionFromRequest(c);
+  const currentUser = await getCurrentUser(c.env, session ?? null);
+  if (currentUser?.confirmedAt) return c.redirect("/", 302);
+  setFlash(c, "error", INVALID_CONFIRMATION_MESSAGE);
+  return c.redirect("/", 302);
+});
+
+app.get("/users/reset_password", async (c) => {
+  const { token } = await getBrowserSession(c);
+  return c.html(
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Forgot your password? | Katbin</title>
+        <link rel="stylesheet" href={stylesheetUrl} />
+      </head>
+      <body class="flex h-full flex-col">
+        <ResetPasswordRequestPage csrf={await csrfToken(token)} />
+      </body>
+    </html>,
+  );
+});
+
+app.post("/users/reset_password", async (c) => {
+  if (!sameOrigin(c.req.raw)) return c.json({ error: "Forbidden" }, 403);
+  const token = getCookie(c, SESSION_COOKIE);
+  const session = token ? await sessionFromToken(c.env, token) : null;
+  if (!token || !session) return c.json({ error: "Forbidden" }, 403);
+  const form = await parseForm(c.req.raw);
+  if (!(await validCsrf(c, token, form))) return c.json({ error: "Forbidden" }, 403);
+  const parsed = emailRequestFormSchema.safeParse(form);
+  if (parsed.success) {
+    const email = parsed.data["user[email]"];
+    const user = await dbFor(c.env)
+      .select()
+      .from(users)
+      .where(eq(users.normalizedEmail, email.toLowerCase()))
+      .get();
+    if (user)
+      await deliverAccountEmail(
+        c.env,
+        user.id,
+        user.email,
+        "reset_password",
+        "Password reset requested",
+        (url) => resetPasswordBody(user.email, url),
+        `${new URL(c.req.url).origin}/users/reset_password`,
+      );
+  }
+  setFlash(c, "info", RESET_PASSWORD_MESSAGE);
+  return c.redirect("/", 303);
+});
+
+app.get("/users/reset_password/:token", async (c) => {
+  const token = c.req.param("token");
+  if (!(await findAccountToken(c.env, token, "reset_password"))) {
+    setFlash(c, "error", INVALID_RESET_MESSAGE);
+    return c.redirect("/", 302);
+  }
+  const browser = await getBrowserSession(c);
+  return c.html(
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Reset password | Katbin</title>
+        <link rel="stylesheet" href={stylesheetUrl} />
+        <script type="module" src={clientUrl} />
+      </head>
+      <body class="flex h-full flex-col">
+        <ResetPasswordPage csrf={await csrfToken(browser.token)} token={token} />
+      </body>
+    </html>,
+  );
+});
+
+app.put("/users/reset_password/:token", async (c) => {
+  if (!sameOrigin(c.req.raw)) return c.json({ error: "Forbidden" }, 403);
+  const sessionToken = getCookie(c, SESSION_COOKIE);
+  const session = sessionToken ? await sessionFromToken(c.env, sessionToken) : null;
+  if (!sessionToken || !session) return c.json({ error: "Forbidden" }, 403);
+  const form = await parseForm(c.req.raw);
+  if (!(await validCsrf(c, sessionToken, form))) return c.json({ error: "Forbidden" }, 403);
+  const parsed = passwordChangeFormSchema.safeParse(form);
+  const token = c.req.param("token");
+  if (!parsed.success)
+    return c.html(
+      <ResetPasswordPage
+        csrf={await csrfToken(sessionToken)}
+        token={token}
+        errors={formErrors(parsed.error)}
+      />,
+    );
+  const consumed = await consumeAccountToken(c.env, token, "reset_password");
+  if (!consumed) {
+    setFlash(c, "error", INVALID_RESET_MESSAGE);
+    return c.redirect("/", 302);
+  }
+  await dbFor(c.env)
+    .update(users)
+    .set({
+      hashedPassword: hashPassword(parsed.data["user[password]"]),
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(users.id, consumed.userId));
+  await revokeUserAccess(c.env, consumed.userId);
+  setFlash(c, "info", "Password reset successfully.");
+  return c.redirect("/users/log_in", 303);
 });
 
 app.get("/users/log_in", async (c) => {
@@ -833,6 +1459,150 @@ app.delete("/users/log_out", async (c) => {
   }
   deleteCookie(c, SESSION_COOKIE, { httpOnly: true, sameSite: "Lax", secure: true, path: "/" });
   return c.redirect("/", 303);
+});
+
+app.get("/users/settings", async (c) => {
+  const { token, session } = await sessionFromRequest(c);
+  const user = await getCurrentUser(c.env, session);
+  if (!token || !session?.userId || !user) return c.redirect("/users/log_in", 302);
+  return c.html(
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Settings | Katbin</title>
+        <link rel="stylesheet" href={stylesheetUrl} />
+        <script type="module" src={clientUrl} />
+      </head>
+      <body class="flex h-full flex-col">
+        <FlashMessages info={takeTypedFlash(c, "info")} error={takeTypedFlash(c, "error")} />
+        <SettingsPage csrf={await csrfToken(token)} user={user} />
+        <Footer />
+      </body>
+    </html>,
+  );
+});
+
+app.put("/users/settings", async (c) => {
+  if (!sameOrigin(c.req.raw)) return c.json({ error: "Forbidden" }, 403);
+  const { token, session } = await sessionFromRequest(c);
+  const user = await getCurrentUser(c.env, session);
+  if (!token || !session?.userId || !user) return c.json({ error: "Forbidden" }, 403);
+  const form = await parseForm(c.req.raw);
+  if (!(await validCsrf(c, token, form))) return c.json({ error: "Forbidden" }, 403);
+  if (form.action === "update_email") {
+    const parsed = emailRequestFormSchema.safeParse(form);
+    const currentPassword = form.current_password ?? "";
+    const errors: FormErrors = parsed.success ? {} : formErrors(parsed.error);
+    if (parsed.success && !(await verifyPassword(currentPassword, user.hashedPassword)))
+      errors.current_password = ["is not valid"];
+    if (parsed.success && parsed.data["user[email]"].toLowerCase() === user.normalizedEmail)
+      errors.email = ["did not change"];
+    if (parsed.success) {
+      const existing = await dbFor(c.env)
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.normalizedEmail, parsed.data["user[email]"].toLowerCase()))
+        .get();
+      if (existing) errors.email = ["has already been taken"];
+    }
+    if (!parsed.success || Object.keys(errors).length)
+      return c.html(
+        <html lang="en">
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Settings | Katbin</title>
+            <link rel="stylesheet" href={stylesheetUrl} />
+          </head>
+          <body class="flex h-full flex-col">
+            <SettingsPage csrf={await csrfToken(token)} user={user} emailErrors={errors} />
+            <Footer />
+          </body>
+        </html>,
+      );
+    const email = parsed.data["user[email]"];
+    await deliverAccountEmail(
+      c.env,
+      user.id,
+      email,
+      `change:${user.email}`,
+      "Email update requested",
+      (url) => emailChangeBody(email, url),
+      `${new URL(c.req.url).origin}/users/settings/confirm_email`,
+    );
+    setFlash(c, "info", "A link to confirm your email change has been sent to the new address.");
+    return c.redirect("/users/settings", 303);
+  }
+  if (form.action !== "update_password") return c.json({ error: "Invalid input" }, 400);
+  const parsed = passwordChangeFormSchema.safeParse(form);
+  const errors: FormErrors = parsed.success ? {} : formErrors(parsed.error);
+  if (!(await verifyPassword(form.current_password ?? "", user.hashedPassword)))
+    errors.current_password = ["is not valid"];
+  if (!parsed.success || Object.keys(errors).length)
+    return c.html(
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Settings | Katbin</title>
+          <link rel="stylesheet" href={stylesheetUrl} />
+        </head>
+        <body class="flex h-full flex-col">
+          <SettingsPage csrf={await csrfToken(token)} user={user} passwordErrors={errors} />
+          <Footer />
+        </body>
+      </html>,
+    );
+  await dbFor(c.env)
+    .update(users)
+    .set({
+      hashedPassword: hashPassword(parsed.data["user[password]"]),
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(users.id, user.id));
+  await revokeUserAccess(c.env, user.id);
+  const created = await createSession(c.env, user.id);
+  setSessionCookie(c, created.token);
+  setFlash(c, "info", "Password updated successfully.");
+  return c.redirect("/users/settings", 303);
+});
+
+app.get("/users/settings/confirm_email/:token", async (c) => {
+  const { session } = await sessionFromRequest(c);
+  const user = await getCurrentUser(c.env, session);
+  if (!session?.userId || !user) return c.redirect("/users/log_in", 302);
+  const token = c.req.param("token");
+  const pending = await findAccountToken(c.env, token, "change_email");
+  if (!pending || pending.userId !== user.id) {
+    setFlash(c, "error", INVALID_EMAIL_CHANGE_MESSAGE);
+    return c.redirect("/users/settings", 302);
+  }
+  const consumed = await consumeAccountToken(c.env, token, "change_email");
+  if (!consumed || !consumed.sentTo) {
+    setFlash(c, "error", INVALID_EMAIL_CHANGE_MESSAGE);
+    return c.redirect("/users/settings", 302);
+  }
+  const normalizedEmail = consumed.sentTo.toLowerCase();
+  const existing = await dbFor(c.env)
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.normalizedEmail, normalizedEmail))
+    .get();
+  if (existing && existing.id !== user.id) {
+    setFlash(c, "error", INVALID_EMAIL_CHANGE_MESSAGE);
+    return c.redirect("/users/settings", 302);
+  }
+  const timestamp = new Date().toISOString();
+  await dbFor(c.env)
+    .update(users)
+    .set({ email: consumed.sentTo, normalizedEmail, updatedAt: timestamp })
+    .where(eq(users.id, user.id));
+  await dbFor(c.env)
+    .delete(accountTokens)
+    .where(and(eq(accountTokens.userId, user.id), like(accountTokens.context, "change:%")));
+  setFlash(c, "info", "Email changed successfully.");
+  return c.redirect("/users/settings", 302);
 });
 
 app.post("/", async (c) => {

@@ -38,3 +38,13 @@ export const sessions = sqliteTable("sessions", {
   expiresAt: integer("expires_at").notNull(),
   insertedAt: integer("inserted_at").notNull(),
 });
+
+export const accountTokens = sqliteTable("account_tokens", {
+  tokenHash: text("token_hash").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  context: text("context").notNull(),
+  sentTo: text("sent_to").notNull(),
+  insertedAt: integer("inserted_at").notNull(),
+});
