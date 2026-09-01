@@ -564,7 +564,7 @@ If you didn't create an account with us, please ignore this.
     expect(db.user("new@example.com")?.email).toBe("New@Example.com");
   });
 
-  it("registers with Phoenix validation and logs in before confirmation", async () => {
+  it("registers with form validation and logs in before confirmation", async () => {
     const db = new TestDatabase();
     const page = await app.request("https://katb.in/users/register", undefined, {
       DB: db,
@@ -584,6 +584,57 @@ If you didn't create an account with us, please ignore this.
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("/users/confirm");
     expect(db.user("original@example.com")?.email).toBe("Original@Example.com");
+  });
+
+  it("preserves browser authentication redirects and form contracts", async () => {
+    const db = new TestDatabase();
+    const settingsRedirect = await app.request("https://katb.in/users/settings", undefined, {
+      DB: db,
+    } as never);
+    const register = await app.request("https://katb.in/users/register", undefined, {
+      DB: db,
+    } as never);
+    const login = await app.request("https://katb.in/users/log_in", undefined, {
+      DB: db,
+    } as never);
+    const registerBody = await register.text();
+    const loginBody = await login.text();
+
+    expect(settingsRedirect.status).toBe(302);
+    expect(settingsRedirect.headers.get("location")).toBe("/users/log_in");
+    expect(register.status).toBe(200);
+    expect(register.headers.get("content-type")).toContain("text/html");
+    expect(registerBody).toContain('<form action="/users/register" method="post"');
+    expect(registerBody).toContain('name="user[email]"');
+    expect(login.status).toBe(200);
+    expect(loginBody).toContain('<form action="/users/log_in" method="post"');
+    expect(loginBody).toContain('name="user[password]"');
+
+    const auth = await loginAs(db, "auth@example.com");
+    const authenticatedRegister = await app.request(
+      "https://katb.in/users/register",
+      { headers: { Cookie: auth.cookie } },
+      { DB: db } as never,
+    );
+    const authenticatedLogin = await app.request(
+      "https://katb.in/users/log_in",
+      { headers: { Cookie: auth.cookie } },
+      { DB: db } as never,
+    );
+    const settings = await app.request(
+      "https://katb.in/users/settings",
+      { headers: { Cookie: auth.cookie } },
+      { DB: db } as never,
+    );
+
+    expect(authenticatedRegister.status).toBe(302);
+    expect(authenticatedRegister.headers.get("location")).toBe("/");
+    expect(authenticatedLogin.status).toBe(302);
+    expect(authenticatedLogin.headers.get("location")).toBe("/");
+    expect(settings.status).toBe(200);
+    expect(await settings.text()).toContain(
+      '<form action="/users/settings" method="post" data-method="put"',
+    );
   });
 
   it("logs in case-insensitively and upgrades bcrypt after success", async () => {
