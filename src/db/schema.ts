@@ -9,6 +9,7 @@ export const pastes = sqliteTable("pastes", {
   storageType: text("storage_type").notNull().default("d1"),
   storageKey: text("storage_key"),
   contentLengthBytes: integer("content_length_bytes").notNull(),
+  contentSha256: text("content_sha256").notNull(),
   createdAt: text("created_at")
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),

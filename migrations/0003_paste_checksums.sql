@@ -1,0 +1,1 @@
+ALTER TABLE pastes ADD COLUMN content_sha256 TEXT NOT NULL DEFAULT '';

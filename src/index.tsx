@@ -34,6 +34,7 @@ type Session = typeof sessions.$inferSelect;
 type FormErrors = Record<string, string[]>;
 
 const MAX_BODY_BYTES = 10_000_000;
+const R2_THRESHOLD_BYTES = 1_000_000;
 const SESSION_COOKIE = "__Host-katbin_session";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 60;
 const SCRYPT_N = 16_384;
@@ -116,6 +117,11 @@ const decodeBase64Url = (value: string) => {
 
 const hashToken = async (token: string) => {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+
+const sha256 = async (bytes: Uint8Array) => {
+  const digest = await crypto.subtle.digest("SHA-256", bytes as BufferSource);
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 };
 
@@ -657,13 +663,20 @@ app.post("/", async (c) => {
   const id = generateId();
   const content = parsed.data["paste[content]"];
   const urlPaste = isUrl(content);
+  const contentBytes = new TextEncoder().encode(content);
+  const contentSha256 = await sha256(contentBytes);
+  const useR2 = contentBytes.byteLength > R2_THRESHOLD_BYTES;
+  if (useR2) await c.env.PASTES.put(id, contentBytes);
   await dbFor(c.env)
     .insert(pastes)
     .values({
       id,
-      content,
+      content: useR2 ? "" : content,
       isUrl: urlPaste,
-      contentLengthBytes: new TextEncoder().encode(content).byteLength,
+      storageType: useR2 ? "r2" : "d1",
+      storageKey: useR2 ? id : null,
+      contentLengthBytes: contentBytes.byteLength,
+      contentSha256,
     });
   return c.redirect(`${urlPaste ? "/v" : ""}/${id}`, 303);
 });
@@ -672,11 +685,27 @@ const findPaste = async (c: AppContext, value: string) => {
   const path = pastePath(value);
   if (!path) return null;
   const paste = await dbFor(c.env)
-    .select({ id: pastes.id, content: pastes.content, isUrl: pastes.isUrl })
+    .select({
+      id: pastes.id,
+      content: pastes.content,
+      isUrl: pastes.isUrl,
+      storageType: pastes.storageType,
+      storageKey: pastes.storageKey,
+    })
     .from(pastes)
     .where(eq(pastes.id, path.id))
     .get();
-  return paste ? { paste, extension: path.extension } : null;
+  if (!paste) return null;
+  if (paste.storageType === "r2") {
+    if (!paste.storageKey) return null;
+    const object = await c.env.PASTES.get(paste.storageKey);
+    if (!object) return null;
+    return {
+      paste: { ...paste, content: await object.text() },
+      extension: path.extension,
+    };
+  }
+  return { paste, extension: path.extension };
 };
 
 app.get("/:id/raw", async (c) => {

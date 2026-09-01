@@ -141,6 +141,108 @@ describe("Katbin shell", () => {
     expect(mailtoDisplay.status).toBe(200);
     expect(await mailtoDisplay.text()).toContain("mailto:user@example.com");
   });
+
+  it("stores paste content in D1 or R2 at the UTF-8 threshold", async () => {
+    const db = new TestDatabase();
+    const bucket = new TestBucket();
+    const bindings = { DB: db, PASTES: bucket } as never;
+    const home = await app.request("https://katb.in/", undefined, bindings);
+    const cookie = cookieFrom(home)!;
+    const csrf = csrfFrom(await home.text());
+    const create = async (content: string) => {
+      const response = await app.request(
+        "https://katb.in/",
+        formRequest(cookie, { _csrf: csrf, "paste[content]": content }),
+        bindings,
+      );
+      return new URL(response.headers.get("location")!, "https://katb.in").pathname.slice(1);
+    };
+    const belowId = await create("é".repeat(499_999));
+    const exactContent = "x".repeat(1_000_000);
+    const exactId = await create(exactContent);
+    const aboveContent = "🙂".repeat(250_001);
+    const aboveId = await create(aboveContent);
+
+    expect(db.paste(belowId)).toMatchObject({
+      storage_type: "d1",
+      storage_key: null,
+      content_length_bytes: 999_998,
+      content_sha256: await checksum("é".repeat(499_999)),
+    });
+    expect(db.paste(exactId)).toMatchObject({
+      storage_type: "d1",
+      storage_key: null,
+      content_length_bytes: 1_000_000,
+      content_sha256: await checksum(exactContent),
+    });
+    expect(db.paste(aboveId)).toMatchObject({
+      storage_type: "r2",
+      storage_key: aboveId,
+      content: "",
+      content_length_bytes: 1_000_004,
+      content_sha256: await checksum(aboveContent),
+    });
+    expect(await bucket.text(aboveId)).toBe(aboveContent);
+    expect(
+      await (await app.request(`https://katb.in/${aboveId}`, undefined, bindings)).text(),
+    ).toContain(aboveContent);
+    expect(
+      await (await app.request(`https://katb.in/v/${aboveId}`, undefined, bindings)).text(),
+    ).toContain(aboveContent);
+    expect(
+      await (await app.request(`https://katb.in/${aboveId}/raw`, undefined, bindings)).text(),
+    ).toBe(aboveContent);
+    expect(
+      await (await app.request(`https://katb.in/${aboveId}/raw`, undefined, bindings)).text(),
+    ).toBe(aboveContent);
+  });
+
+  it("does not create a D1 reference when an R2 upload fails", async () => {
+    const db = new TestDatabase();
+    const bucket = new TestBucket(true);
+    const bindings = { DB: db, PASTES: bucket } as never;
+    const home = await app.request("https://katb.in/", undefined, bindings);
+    const response = await app.request(
+      "https://katb.in/",
+      formRequest(cookieFrom(home)!, {
+        _csrf: csrfFrom(await home.text()),
+        "paste[content]": "x".repeat(1_000_001),
+      }),
+      bindings,
+    );
+
+    expect(response.status).toBe(500);
+    expect(db.pasteCount()).toBe(0);
+    expect(bucket.size()).toBe(0);
+  });
+
+  it("returns not found for a missing R2 object", async () => {
+    const db = new TestDatabase();
+    const bucket = new TestBucket();
+    const bindings = { DB: db, PASTES: bucket } as never;
+    const home = await app.request("https://katb.in/", undefined, bindings);
+    const cookie = cookieFrom(home)!;
+    const id = new URL(
+      (
+        await app.request(
+          "https://katb.in/",
+          formRequest(cookie, {
+            _csrf: csrfFrom(await home.text()),
+            "paste[content]": "x".repeat(1_000_001),
+          }),
+          bindings,
+        )
+      ).headers.get("location")!,
+      "https://katb.in",
+    ).pathname.slice(1);
+    bucket.delete(id);
+
+    for (const path of [`/${id}`, `/v/${id}`, `/${id}/raw`]) {
+      const response = await app.request(`https://katb.in${path}`, undefined, bindings);
+      expect(response.status).toBe(404);
+      expect(await response.text()).toBe("Not found");
+    }
+  });
 });
 
 describe("account authentication", () => {
@@ -317,9 +419,24 @@ const formRequest = (cookie: string, values: Record<string, string>) => ({
   },
   body: new URLSearchParams(values),
 });
+const checksum = async (content: string) =>
+  [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content)))]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 
 class TestDatabase {
-  private readonly rows = new Map<string, { id: string; content: string; is_url: boolean }>();
+  private readonly rows = new Map<
+    string,
+    {
+      id: string;
+      content: string;
+      is_url: boolean;
+      storage_type: string;
+      storage_key: string | null;
+      content_length_bytes: number;
+      content_sha256: string;
+    }
+  >();
   private readonly userRows = new Map<
     number,
     {
@@ -377,14 +494,31 @@ class TestDatabase {
     return this.sessionRows.size;
   }
 
+  paste(id: string) {
+    return this.rows.get(id);
+  }
+
+  pasteCount() {
+    return this.rows.size;
+  }
+
   prepare(query: string) {
     const normalized = query.toLowerCase();
     return {
       bind: (...values: unknown[]) => ({
         run: async () => {
           if (normalized.includes('insert into "pastes"')) {
-            const [id, content, isUrl] = values as [string, string, boolean];
-            this.rows.set(id, { id, content, is_url: isUrl });
+            const [id, content, isUrl, storageType, storageKey, contentLengthBytes, contentSha256] =
+              values as [string, string, boolean, string, string | null, number, string];
+            this.rows.set(id, {
+              id,
+              content,
+              is_url: isUrl,
+              storage_type: storageType,
+              storage_key: storageKey,
+              content_length_bytes: contentLengthBytes,
+              content_sha256: contentSha256,
+            });
           } else if (normalized.includes('insert into "users"')) {
             const [email, normalizedEmail, hashedPassword] = values as [string, string, string];
             const id = this.nextUserId++;
@@ -465,9 +599,42 @@ class TestDatabase {
               : [];
           }
           const row = this.rows.get(values.at(-1) as string);
-          return row ? [[row.id, row.content, row.is_url]] : [];
+          return row ? [[row.id, row.content, row.is_url, row.storage_type, row.storage_key]] : [];
         },
       }),
     };
+  }
+}
+
+class TestBucket {
+  private readonly objects = new Map<string, Uint8Array>();
+
+  constructor(private readonly fail = false) {}
+
+  async put(key: string, value: ArrayBuffer | ArrayBufferView | string) {
+    if (this.fail) throw new Error("R2 upload failed");
+    this.objects.set(
+      key,
+      typeof value === "string"
+        ? new TextEncoder().encode(value)
+        : new Uint8Array(value instanceof ArrayBuffer ? value : value.buffer),
+    );
+  }
+
+  async get(key: string) {
+    const value = this.objects.get(key);
+    return value ? { text: async () => new TextDecoder().decode(value) } : null;
+  }
+
+  async text(key: string) {
+    return (await this.get(key))?.text();
+  }
+
+  delete(key: string) {
+    this.objects.delete(key);
+  }
+
+  size() {
+    return this.objects.size;
   }
 }
