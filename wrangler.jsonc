@@ -102,17 +102,12 @@
       "vars": {
         "ENVIRONMENT": "production",
       },
+      "workers_dev": false,
       "send_email": [
         {
           "name": "EMAIL",
           "allowed_sender_addresses": ["noreply@katb.in"],
           "remote": true,
-        },
-      ],
-      "routes": [
-        {
-          "pattern": "katb.in",
-          "custom_domain": true,
         },
       ],
       "d1_databases": [
