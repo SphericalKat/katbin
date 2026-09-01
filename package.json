@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@alpinejs/csp": "3.17.1",
+    "bcryptjs": "3.0.2",
     "drizzle-orm": "^0.45.2",
     "hono": "4.13.5",
     "zod": "^4.5.4"
