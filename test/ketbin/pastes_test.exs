@@ -6,7 +6,7 @@ defmodule Ketbin.PastesTest do
   describe "pastes" do
     alias Ketbin.Pastes.Paste
 
-    @valid_attrs %{content: "some content", is_url: true}
+    @valid_attrs %{id: "some-id", content: "some content", is_url: true}
     @update_attrs %{content: "some updated content", is_url: false}
     @invalid_attrs %{content: nil, is_url: nil}
 

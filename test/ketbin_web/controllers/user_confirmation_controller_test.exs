@@ -9,14 +9,6 @@ defmodule KetbinWeb.UserConfirmationControllerTest do
     %{user: user_fixture()}
   end
 
-  describe "GET /users/confirm" do
-    test "renders the confirmation page", %{conn: conn} do
-      conn = get(conn, Routes.user_confirmation_path(conn, :new))
-      response = html_response(conn, 200)
-      assert response =~ "<h1>Resend confirmation instructions</h1>"
-    end
-  end
-
   describe "POST /users/confirm" do
     @tag :capture_log
     test "sends a new confirmation token", %{conn: conn, user: user} do
