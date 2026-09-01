@@ -21,5 +21,7 @@ config :ketbin, KetbinWeb.Endpoint,
   http: [port: 4002],
   server: false
 
+config :ketbin, Ketbin.Mailer, adapter: Swoosh.Adapters.Test
+
 # Print only warnings and errors during test
-config :logger, level: :warn
+config :logger, level: :warning

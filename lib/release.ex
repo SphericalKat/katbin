@@ -5,8 +5,6 @@ defmodule Ketbin.Release do
 
   @app :ketbin
 
-  require Logger
-
   def migrate do
     Application.ensure_all_started(@app)
     load_app()

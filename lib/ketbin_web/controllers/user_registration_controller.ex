@@ -21,8 +21,8 @@ defmodule KetbinWeb.UserRegistrationController do
 
         conn
         |> put_flash(:info, "User created successfully.")
+        |> put_session(:user_return_to, "/users/confirm")
         |> UserAuth.log_in_user(user)
-        |> redirect(to: "/users/confirm")
 
       {:error, %Ecto.Changeset{} = changeset} ->
         render(conn, "new.html", changeset: changeset)
