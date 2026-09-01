@@ -580,7 +580,7 @@ const Header: FC<{ csrf?: string; user?: User | null }> = ({ csrf, user }) => (
               </li>
               {csrf ? (
                 <li>
-                  <form action="/users/log_out" method="post" data-method="delete">
+                  <form action="/users/log_out" method="post" data-method="DELETE">
                     <input type="hidden" name="_csrf" value={csrf} />
                     <button type="submit">Log out</button>
                   </form>
@@ -863,7 +863,7 @@ const ResetPasswordPage: FC<{ csrf: string; token: string; errors?: FormErrors }
       <form
         action={`/users/reset_password/${token}`}
         method="post"
-        data-method="put"
+        data-method="PUT"
         class="m-auto flex h-full flex-col items-start justify-center"
       >
         <input type="hidden" name="_csrf" value={csrf} />
@@ -924,7 +924,7 @@ const SettingsPage: FC<{
         <form
           action="/users/settings"
           method="post"
-          data-method="put"
+          data-method="PUT"
           class="m-auto flex h-full flex-col items-start justify-center"
         >
           <h2 class="pb-4 text-2xl font-bold text-amber">Change email</h2>
@@ -968,7 +968,7 @@ const SettingsPage: FC<{
         <form
           action="/users/settings"
           method="post"
-          data-method="put"
+          data-method="PUT"
           class="m-auto flex h-full flex-col items-start justify-center"
         >
           <h2 class="pb-4 text-2xl font-bold text-amber">Change password</h2>
@@ -1125,7 +1125,7 @@ const EditPage: FC<{ csrf: string; user: User; paste: { id: string; content: str
           class="relative flex h-full w-full flex-col"
           action={`/${paste.id}`}
           method="post"
-          data-method="patch"
+          data-method="PATCH"
         >
           <input type="hidden" name="_csrf" value={csrf} />
           <textarea

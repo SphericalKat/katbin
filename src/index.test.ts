@@ -650,7 +650,7 @@ If you didn't create an account with us, please ignore this.
     expect(authenticatedLogin.headers.get("location")).toBe("/");
     expect(settings.status).toBe(200);
     expect(await settings.text()).toContain(
-      '<form action="/users/settings" method="post" data-method="put"',
+      '<form action="/users/settings" method="post" data-method="PUT"',
     );
   });
 
