@@ -80,8 +80,9 @@ export class MigrationMismatchError extends Error {
 }
 
 class MigrationWriteError extends Error {
-  constructor(recordType: string, recordId: string) {
-    super(`Migration target write failed for ${recordType} ${recordId}`);
+  constructor(recordType: string, recordId: string, cause?: unknown) {
+    const detail = cause instanceof Error ? `: ${cause.message}` : "";
+    super(`Migration target write failed for ${recordType} ${recordId}${detail}`);
     this.name = "MigrationWriteError";
   }
 }
@@ -192,7 +193,11 @@ const migrateUsers = async (
         if (error instanceof MigrationMismatchError) throw error;
         const first = batch[0]!.id;
         const last = batch.at(-1)!.id;
-        throw new MigrationWriteError("user", first === last ? String(first) : `${first}..${last}`);
+        throw new MigrationWriteError(
+          "user",
+          first === last ? String(first) : `${first}..${last}`,
+          error,
+        );
       }
     } else {
       for (const user of batch) {
@@ -250,7 +255,7 @@ const migratePastes = async (
         if (error instanceof MigrationMismatchError) throw error;
         const first = batch[0]!.id;
         const last = batch.at(-1)!.id;
-        throw new MigrationWriteError("paste", first === last ? first : `${first}..${last}`);
+        throw new MigrationWriteError("paste", first === last ? first : `${first}..${last}`, error);
       }
     } else {
       for (const [index, targetPaste] of targetBatch.entries()) {
@@ -264,7 +269,7 @@ const migratePastes = async (
           if (validateRecords) await validatePaste(target, batch[index]!, targetPaste);
         } catch (error) {
           if (error instanceof MigrationMismatchError) throw error;
-          throw new MigrationWriteError("paste", batch[index]!.id);
+          throw new MigrationWriteError("paste", batch[index]!.id, error);
         }
       }
     }
@@ -547,6 +552,23 @@ interface D1Statement {
   params: unknown[];
 }
 
+interface D1ResponseBody {
+  success?: boolean;
+  errors?: Array<{ message?: string }>;
+  messages?: Array<{ message?: string } | string>;
+  result?: Array<{ success?: boolean; results?: unknown[] }>;
+}
+
+const d1ResponseDetail = (body: D1ResponseBody) =>
+  [...(body.errors ?? []), ...(body.messages ?? [])]
+    .map((item) => (typeof item === "string" ? item : item.message))
+    .filter(Boolean)
+    .join("; ");
+
+const d1RetryableStatus = (status: number) => status === 408 || status === 429 || status >= 500;
+
+const wait = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
 interface CloudflareD1Options {
   accountId: string;
   databaseId: string;
@@ -566,25 +588,41 @@ export class CloudflareD1 implements D1Executor {
     this.apiBaseUrl = options.apiBaseUrl ?? "https://api.cloudflare.com/client/v4";
   }
 
+  private async request(body: unknown) {
+    const url = `${this.apiBaseUrl}/accounts/${this.options.accountId}/d1/database/${this.options.databaseId}/query`;
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        const response = await this.fetch(url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.options.apiToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        });
+        if (attempt < 4 && d1RetryableStatus(response.status)) {
+          await response.arrayBuffer();
+          await wait(250 * 2 ** attempt + Math.floor(Math.random() * 100));
+          continue;
+        }
+        return response;
+      } catch (error) {
+        if (attempt >= 4) throw error;
+        await wait(250 * 2 ** attempt + Math.floor(Math.random() * 100));
+      }
+    }
+  }
+
   async query<T extends Record<string, unknown>>(sql: string, params: unknown[] = []) {
-    const response = await this.fetch(
-      `${this.apiBaseUrl}/accounts/${this.options.accountId}/d1/database/${this.options.databaseId}/query`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.options.apiToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ sql, params }),
-      },
-    );
-    const body = (await response.json()) as {
-      success?: boolean;
-      result?: Array<{ results?: unknown[] }>;
-    };
+    const response = await this.request({ sql, params });
+    const body = (await response.json().catch(() => ({}))) as D1ResponseBody;
     const result = body.result?.[0];
-    if (!response.ok || !body.success || !result)
-      throw new Error(`Cloudflare D1 request failed (${response.status})`);
+    if (!response.ok || !body.success || !result || result.success === false) {
+      const detail = d1ResponseDetail(body);
+      throw new Error(
+        `Cloudflare D1 request failed (${response.status})${detail ? `: ${detail}` : ""}`,
+      );
+    }
     return (result.results ?? []) as T[];
   }
 
@@ -594,29 +632,20 @@ export class CloudflareD1 implements D1Executor {
 
   async batch(statements: readonly D1Statement[]) {
     if (!statements.length) return;
-    const response = await this.fetch(
-      `${this.apiBaseUrl}/accounts/${this.options.accountId}/d1/database/${this.options.databaseId}/query`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.options.apiToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ batch: statements }),
-      },
-    );
-    const body = (await response.json()) as {
-      success?: boolean;
-      result?: Array<{ success?: boolean }>;
-    };
+    const response = await this.request({ batch: statements });
+    const body = (await response.json().catch(() => ({}))) as D1ResponseBody;
     if (
       !response.ok ||
       !body.success ||
       !body.result ||
       body.result.length !== statements.length ||
       body.result.some((result) => result.success === false)
-    )
-      throw new Error(`Cloudflare D1 batch failed (${response.status})`);
+    ) {
+      const detail = d1ResponseDetail(body);
+      throw new Error(
+        `Cloudflare D1 batch failed (${response.status})${detail ? `: ${detail}` : ""}`,
+      );
+    }
   }
 }
 
