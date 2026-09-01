@@ -59,6 +59,22 @@ describe("Katbin shell", () => {
     expect(await raw.text()).toBe(content);
   });
 
+  it("rejects paste creation when the Cloudflare limiter denies the IP", async () => {
+    const limiter = new TestRateLimit(false);
+    const response = await app.request(
+      "https://katb.in/",
+      {
+        method: "POST",
+        headers: { Origin: "https://katb.in", "CF-Connecting-IP": "203.0.113.4" },
+        body: "",
+      },
+      { DB: new TestDatabase(), BROWSER_PASTE_LIMITER: limiter } as never,
+    );
+
+    expect(response.status).toBe(429);
+    expect(limiter.keys).toEqual(["203.0.113.4"]);
+  });
+
   it("rejects missing pastes and invalid input", async () => {
     const db = new TestDatabase();
     expect(
@@ -211,6 +227,7 @@ describe("Katbin shell", () => {
     const exactId = await create(exactContent);
     const aboveContent = "🙂".repeat(250_001);
     const aboveId = await create(aboveContent);
+    const abovePaste = db.paste(aboveId)!;
 
     expect(db.paste(belowId)).toMatchObject({
       storage_type: "d1",
@@ -224,14 +241,14 @@ describe("Katbin shell", () => {
       content_length_bytes: 1_000_000,
       content_sha256: await checksum(exactContent),
     });
-    expect(db.paste(aboveId)).toMatchObject({
+    expect(abovePaste).toMatchObject({
       storage_type: "r2",
-      storage_key: aboveId,
       content: "",
       content_length_bytes: 1_000_004,
       content_sha256: await checksum(aboveContent),
     });
-    expect(await bucket.text(aboveId)).toBe(aboveContent);
+    expect(abovePaste.storage_key).toMatch(new RegExp("^" + aboveId + "-"));
+    expect(await bucket.text(abovePaste.storage_key!)).toBe(aboveContent);
     expect(
       await (await app.request(`https://katb.in/${aboveId}`, undefined, bindings)).text(),
     ).toContain(aboveContent);
@@ -284,7 +301,7 @@ describe("Katbin shell", () => {
       ).headers.get("location")!,
       "https://katb.in",
     ).pathname.slice(1);
-    bucket.delete(id);
+    bucket.delete(db.paste(id)!.storage_key!);
 
     for (const path of [`/${id}`, `/v/${id}`, `/${id}/raw`]) {
       const response = await app.request(`https://katb.in${path}`, undefined, bindings);
@@ -337,7 +354,7 @@ describe("Katbin shell", () => {
     expect(db.paste(ownedBody.id as string)).toMatchObject({ owner_id: auth.userId });
     expect(large.status).toBe(201);
     expect(largeBody).toMatchObject({ content: largeContent, is_url: false });
-    expect(await bucket.text(largeBody.id as string)).toBe(largeContent);
+    expect(await bucket.text(db.paste(largeBody.id as string)!.storage_key!)).toBe(largeContent);
 
     for (const body of [anonymousBody, largeBody]) {
       const response = await app.request(
@@ -1230,6 +1247,17 @@ class TestBucket {
 
   size() {
     return this.objects.size;
+  }
+}
+
+class TestRateLimit {
+  readonly keys: string[] = [];
+
+  constructor(private readonly success: boolean) {}
+
+  limit({ key }: { key: string }) {
+    this.keys.push(key);
+    return Promise.resolve({ success: this.success });
   }
 }
 

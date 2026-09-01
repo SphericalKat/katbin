@@ -13,6 +13,11 @@
 }
 
 @layer base {
+  [hidden],
+  [x-cloak] {
+    display: none !important;
+  }
+
   * {
     color: white;
     font-family: "JetBrains Mono", monospace;

@@ -14,7 +14,8 @@ import { scryptSync, timingSafeEqual } from "node:crypto";
 import sanitizeHtml from "sanitize-html";
 import { z } from "zod";
 
-import clientUrl from "./client.ts?url";
+import clientUrl from "./client.js?url";
+import alpineUrl from "@alpinejs/csp/dist/cdn.min.js?url";
 import { R2_THRESHOLD_BYTES } from "./constants";
 import { accountTokens, pastes, sessions, users } from "./db/schema";
 import stylesheetUrl from "./styles.css?url";
@@ -99,6 +100,11 @@ type Bindings = {
   ENVIRONMENT: string;
   APPROVED_EMAIL_RECIPIENTS?: string;
   PASTES: R2Bucket;
+  BROWSER_PASTE_LIMITER?: RateLimit;
+  API_PASTE_LIMITER?: RateLimit;
+  LOGIN_LIMITER?: RateLimit;
+  REGISTRATION_LIMITER?: RateLimit;
+  ACCOUNT_EMAIL_LIMITER?: RateLimit;
 };
 type AppContext = Context<{ Bindings: Bindings }>;
 type User = typeof users.$inferSelect;
@@ -122,7 +128,7 @@ const vowels = "aeiou";
 const customIdPattern = /^[A-Za-z0-9_-]{1,64}$/;
 const reservedIds = new Set(["api", "assets", "edit", "pastes", "raw", "users", "v"]);
 
-const pastePathSchema = z.object({ id: z.string().min(1).max(128) });
+const pastePathSchema = z.object({ id: z.string().min(1).max(255) });
 const pasteFormSchema = z.object({ "paste[content]": z.string().min(1).max(MAX_BODY_BYTES) });
 const pasteApiSchema = z.object({
   paste: z.object({ content: z.string().min(1).max(MAX_BODY_BYTES) }),
@@ -183,6 +189,14 @@ const pastePath = (value: string) => {
 
 const dbFor = (env: Bindings) => drizzle(env.DB);
 const now = () => Math.floor(Date.now() / 1000);
+
+const requestAllowed = async (c: AppContext, limiter: RateLimit | undefined) => {
+  if (!limiter) return true;
+  const { success } = await limiter.limit({
+    key: c.req.header("CF-Connecting-IP") ?? "unknown",
+  });
+  return success;
+};
 
 const CONFIRMATION_MESSAGE =
   "If your email is in our system and it has not been confirmed yet, you will receive an email with instructions shortly.";
@@ -532,16 +546,40 @@ const Header: FC<{ csrf?: string; user?: User | null }> = ({ csrf, user }) => (
     </a>
     <nav aria-label="Account navigation">
       {user ? (
-        <div class="flex items-center gap-4">
-          <span class="text-amber">{user.email}</span>
-          <a href="/pastes">My Pastes</a>
-          <a href="/users/settings">Settings</a>
-          {csrf ? (
-            <form action="/users/log_out" method="post" data-method="delete">
-              <input type="hidden" name="_csrf" value={csrf} />
-              <button type="submit">Log out</button>
-            </form>
-          ) : null}
+        <div class="relative" x-data="accountMenu">
+          <button
+            type="button"
+            class="text-amber"
+            aria-expanded="false"
+            aria-controls="account-menu"
+            {...{ "x-on:click": "toggle", "x-bind:aria-expanded": "open" }}
+          >
+            {user.email} ▼
+          </button>
+          <div
+            id="account-menu"
+            x-cloak
+            x-show="open"
+            {...{ "x-on:click.outside": "close", "x-on:keydown.escape.window": "close" }}
+            class="absolute right-0 z-50 bg-header px-4 py-2"
+          >
+            <ul>
+              <li>
+                <a href="/users/settings">Settings</a>
+              </li>
+              <li>
+                <a href="/pastes">My Pastes</a>
+              </li>
+              {csrf ? (
+                <li>
+                  <form action="/users/log_out" method="post" data-method="delete">
+                    <input type="hidden" name="_csrf" value={csrf} />
+                    <button type="submit">Log out</button>
+                  </form>
+                </li>
+              ) : null}
+            </ul>
+          </div>
         </div>
       ) : (
         <ul class="flex gap-4">
@@ -555,6 +593,13 @@ const Header: FC<{ csrf?: string; user?: User | null }> = ({ csrf, user }) => (
       )}
     </nav>
   </header>
+);
+
+const ClientScripts: FC = () => (
+  <>
+    <script src={alpineUrl} />
+    <script src={clientUrl} />
+  </>
 );
 
 const Footer: FC = () => (
@@ -990,7 +1035,7 @@ const PastePage: FC<{
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>{id} | Katbin</title>
       <link rel="stylesheet" href={stylesheetUrl} />
-      <script type="module" src={clientUrl} />
+      <ClientScripts />
     </head>
     <body class="flex h-full flex-col">
       <Header csrf={csrf} user={user} />
@@ -1023,7 +1068,7 @@ const PastesPage: FC<{ csrf: string; user: User; pastes: Array<{ id: string }> }
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>My Pastes | Katbin</title>
       <link rel="stylesheet" href={stylesheetUrl} />
-      <script type="module" src={clientUrl} />
+      <ClientScripts />
     </head>
     <body class="flex h-full flex-col">
       <Header csrf={csrf} user={user} />
@@ -1052,7 +1097,7 @@ const EditPage: FC<{ csrf: string; user: User; paste: { id: string; content: str
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>Edit {paste.id} | Katbin</title>
       <link rel="stylesheet" href={stylesheetUrl} />
-      <script type="module" src={clientUrl} />
+      <ClientScripts />
     </head>
     <body class="flex h-full flex-col">
       <Header csrf={csrf} user={user} />
@@ -1091,10 +1136,13 @@ const createStoredPaste = async (
   const contentSha256 = await sha256(contentBytes);
   const useR2 = contentBytes.byteLength > R2_THRESHOLD_BYTES;
   const urlPaste = isUrl(content);
+  const storageKey = useR2
+    ? id + "-" + encodeBase64Url(crypto.getRandomValues(new Uint8Array(12)))
+    : null;
   let uploaded = false;
   try {
     if (useR2) {
-      await c.env.PASTES.put(id, contentBytes);
+      await c.env.PASTES.put(storageKey!, contentBytes);
       uploaded = true;
     }
     await dbFor(c.env)
@@ -1105,12 +1153,12 @@ const createStoredPaste = async (
         isUrl: urlPaste,
         ownerId,
         storageType: useR2 ? "r2" : "d1",
-        storageKey: useR2 ? id : null,
+        storageKey,
         contentLengthBytes: contentBytes.byteLength,
         contentSha256,
       });
   } catch (error) {
-    if (uploaded) await c.env.PASTES.delete(id);
+    if (uploaded && storageKey) await c.env.PASTES.delete(storageKey);
     throw error;
   }
   return { id, urlPaste };
@@ -1147,7 +1195,7 @@ app.get("/", async (c) => {
         />
         <link rel="icon" href="/favicon.ico" />
         <link rel="stylesheet" href={stylesheetUrl} />
-        <script type="module" src={clientUrl} />
+        <ClientScripts />
       </head>
       <body class="flex h-full flex-col">
         <Home
@@ -1188,6 +1236,8 @@ app.get("/users/register", async (c) => {
 
 app.post("/users/register", async (c) => {
   if (!sameOrigin(c.req.raw)) return c.json({ error: "Forbidden" }, 403);
+  if (!(await requestAllowed(c, c.env.REGISTRATION_LIMITER)))
+    return c.json({ error: "Too many requests" }, 429);
   const token = getCookie(c, SESSION_COOKIE);
   const session = token ? await sessionFromToken(c.env, token) : null;
   if (!token || !session) return c.json({ error: "Forbidden" }, 403);
@@ -1274,6 +1324,8 @@ app.get("/users/confirm", async (c) => {
 
 app.post("/users/confirm", async (c) => {
   if (!sameOrigin(c.req.raw)) return c.json({ error: "Forbidden" }, 403);
+  if (!(await requestAllowed(c, c.env.ACCOUNT_EMAIL_LIMITER)))
+    return c.json({ error: "Too many requests" }, 429);
   const token = getCookie(c, SESSION_COOKIE);
   const session = token ? await sessionFromToken(c.env, token) : null;
   if (!token || !session) return c.json({ error: "Forbidden" }, 403);
@@ -1338,6 +1390,8 @@ app.get("/users/reset_password", async (c) => {
 
 app.post("/users/reset_password", async (c) => {
   if (!sameOrigin(c.req.raw)) return c.json({ error: "Forbidden" }, 403);
+  if (!(await requestAllowed(c, c.env.ACCOUNT_EMAIL_LIMITER)))
+    return c.json({ error: "Too many requests" }, 429);
   const token = getCookie(c, SESSION_COOKIE);
   const session = token ? await sessionFromToken(c.env, token) : null;
   if (!token || !session) return c.json({ error: "Forbidden" }, 403);
@@ -1380,7 +1434,7 @@ app.get("/users/reset_password/:token", async (c) => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Reset password | Katbin</title>
         <link rel="stylesheet" href={stylesheetUrl} />
-        <script type="module" src={clientUrl} />
+        <ClientScripts />
       </head>
       <body class="flex h-full flex-col">
         <ResetPasswordPage csrf={await csrfToken(browser.token)} token={token} />
@@ -1450,6 +1504,8 @@ app.get("/users/log_in", async (c) => {
 
 app.post("/users/log_in", async (c) => {
   if (!sameOrigin(c.req.raw)) return c.json({ error: "Forbidden" }, 403);
+  if (!(await requestAllowed(c, c.env.LOGIN_LIMITER)))
+    return c.json({ error: "Too many requests" }, 429);
   const token = getCookie(c, SESSION_COOKIE);
   const session = token ? await sessionFromToken(c.env, token) : null;
   if (!token || !session) return c.json({ error: "Forbidden" }, 403);
@@ -1510,7 +1566,7 @@ app.get("/users/settings", async (c) => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Settings | Katbin</title>
         <link rel="stylesheet" href={stylesheetUrl} />
-        <script type="module" src={clientUrl} />
+        <ClientScripts />
       </head>
       <body class="flex h-full flex-col">
         <FlashMessages info={takeTypedFlash(c, "info")} error={takeTypedFlash(c, "error")} />
@@ -1528,6 +1584,8 @@ app.put("/users/settings", async (c) => {
   if (!token || !session?.userId || !user) return c.json({ error: "Forbidden" }, 403);
   const form = await parseForm(c.req.raw);
   if (!(await validCsrf(c, token, form))) return c.json({ error: "Forbidden" }, 403);
+  if (form.action === "update_email" && !(await requestAllowed(c, c.env.ACCOUNT_EMAIL_LIMITER)))
+    return c.json({ error: "Too many requests" }, 429);
   if (form.action === "update_email") {
     const parsed = emailRequestFormSchema.safeParse(form);
     const currentPassword = form.current_password ?? "";
@@ -1647,6 +1705,8 @@ app.post("/api/paste", async (c) => {
   const contentType = c.req.header("Content-Type")?.split(";", 1)[0].trim().toLowerCase();
   if (contentType !== "application/json")
     return c.json({ error: "Content-Type must be JSON" }, 415);
+  if (!(await requestAllowed(c, c.env.API_PASTE_LIMITER)))
+    return c.json({ error: "Too many requests" }, 429);
   const contentLength = Number(c.req.header("Content-Length"));
   if (contentLength > MAX_BODY_BYTES) return c.json({ error: "Payload too large" }, 413);
   let body: unknown;
@@ -1676,6 +1736,8 @@ app.get("/api/paste/:id", async (c) => {
 
 app.post("/", async (c) => {
   if (!sameOrigin(c.req.raw)) return c.json({ error: "Forbidden" }, 403);
+  if (!(await requestAllowed(c, c.env.BROWSER_PASTE_LIMITER)))
+    return c.json({ error: "Too many requests" }, 429);
   const token = getCookie(c, SESSION_COOKIE);
   const session = token ? await sessionFromToken(c.env, token) : null;
   if (!token || !session) return c.json({ error: "Forbidden" }, 403);
