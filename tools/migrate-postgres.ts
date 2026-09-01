@@ -55,6 +55,13 @@ export interface TargetAdapter {
   countPastes(): Promise<number>;
 }
 
+export interface MigrationProgress {
+  resource: "users" | "pastes";
+  processed: number;
+  total: number;
+  remaining: number;
+}
+
 export class MigrationMismatchError extends Error {
   readonly recordType: string;
   readonly recordId: string;
@@ -160,9 +167,16 @@ const validateTotal = async (actual: number, expected: number, name: CursorName)
   if (actual !== expected) mismatch("dataset", name, "row total");
 };
 
-const migrateUsers = async (source: SourceAdapter, target: TargetAdapter, batchSize: number) => {
+const migrateUsers = async (
+  source: SourceAdapter,
+  target: TargetAdapter,
+  batchSize: number,
+  total: number,
+  onProgress?: (progress: MigrationProgress) => void,
+) => {
   const cursorValue = await target.getCursor("users");
   let cursor = cursorValue === null ? null : parseCursorId(cursorValue, "users");
+  let processed = onProgress ? await target.countUsers() : 0;
   for (;;) {
     const batch = await source.listUsersAfter(cursor, batchSize);
     if (!batch.length) return;
@@ -179,11 +193,25 @@ const migrateUsers = async (source: SourceAdapter, target: TargetAdapter, batchS
     if (cursor !== null && nextCursor <= cursor) mismatch("user", nextCursor, "cursor order");
     await target.saveCursor("users", String(nextCursor));
     cursor = nextCursor;
+    processed += batch.length;
+    onProgress?.({
+      resource: "users",
+      processed,
+      total,
+      remaining: Math.max(total - processed, 0),
+    });
   }
 };
 
-const migratePastes = async (source: SourceAdapter, target: TargetAdapter, batchSize: number) => {
+const migratePastes = async (
+  source: SourceAdapter,
+  target: TargetAdapter,
+  batchSize: number,
+  total: number,
+  onProgress?: (progress: MigrationProgress) => void,
+) => {
   let cursor = await target.getCursor("pastes");
+  let processed = onProgress ? await target.countPastes() : 0;
   for (;;) {
     const batch = await source.listPastesAfter(cursor, batchSize);
     if (!batch.length) return;
@@ -204,12 +232,20 @@ const migratePastes = async (source: SourceAdapter, target: TargetAdapter, batch
     if (cursor !== null && nextCursor <= cursor) mismatch("paste", nextCursor, "cursor order");
     await target.saveCursor("pastes", nextCursor);
     cursor = nextCursor;
+    processed += batch.length;
+    onProgress?.({
+      resource: "pastes",
+      processed,
+      total,
+      remaining: Math.max(total - processed, 0),
+    });
   }
 };
 
 export interface MigrationOptions {
   batchSize?: number;
   validateTotals?: boolean;
+  onProgress?: (progress: MigrationProgress) => void;
 }
 
 export interface MigrationSummary {
@@ -220,16 +256,16 @@ export interface MigrationSummary {
 export const migrate = async (
   source: SourceAdapter,
   target: TargetAdapter,
-  { batchSize = 100, validateTotals = true }: MigrationOptions = {},
+  { batchSize = 100, validateTotals = true, onProgress }: MigrationOptions = {},
 ): Promise<MigrationSummary> => {
   if (!Number.isSafeInteger(batchSize) || batchSize < 1)
     throw new Error("Migration batch size must be positive");
   const userTotal = await source.countUsers();
-  await migrateUsers(source, target, batchSize);
+  await migrateUsers(source, target, batchSize, userTotal, onProgress);
   if (validateTotals) await validateTotal(await target.countUsers(), userTotal, "users");
 
   const pasteTotal = await source.countPastes();
-  await migratePastes(source, target, batchSize);
+  await migratePastes(source, target, batchSize, pasteTotal, onProgress);
   if (validateTotals) await validateTotal(await target.countPastes(), pasteTotal, "pastes");
   return { users: userTotal, pastes: pasteTotal };
 };
@@ -438,6 +474,17 @@ export class PostgresSource implements SourceAdapter {
         operation: row.operation,
       } as const;
     });
+  }
+
+  async getReplicationQueue(cursor: string | null) {
+    const where = cursor === null ? "" : "WHERE id > $1";
+    const values = cursor === null ? [] : [cursor];
+    const [row] = await this.query<{ pending: string; latestId: string | null }>(
+      `SELECT COUNT(*)::text AS pending, MAX(id)::text AS "latestId"
+         FROM katbin_replication_events ${where}`,
+      values,
+    );
+    return { pending: parseCount(row.pending, "replication events"), latestId: row.latestId };
   }
 }
 
@@ -746,9 +793,24 @@ export const runConfiguredMigration = async () => {
   try {
     const target = CloudflareTarget.fromEnv();
     const configuredBatchSize = Number(process.env.MIGRATION_BATCH_SIZE ?? 100);
+    const startedAt = new Map<MigrationProgress["resource"], number>();
     return await migrate(source, target, {
       batchSize: configuredBatchSize,
       validateTotals: process.env.MIGRATION_VALIDATE_TOTALS !== "false",
+      onProgress: (progress) => {
+        const start = startedAt.get(progress.resource) ?? Date.now();
+        startedAt.set(progress.resource, start);
+        const elapsedSeconds = Math.max((Date.now() - start) / 1000, 0.001);
+        const ratePerSecond = progress.processed / elapsedSeconds;
+        console.log(
+          JSON.stringify({
+            ...progress,
+            ratePerSecond: Math.round(ratePerSecond * 10) / 10,
+            etaSeconds:
+              progress.remaining === 0 ? 0 : Math.ceil(progress.remaining / ratePerSecond),
+          }),
+        );
+      },
     });
   } finally {
     await source.close();

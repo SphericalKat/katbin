@@ -23,6 +23,7 @@ export interface ReplicationEvent {
 
 export interface ReplicationSource {
   listReplicationEventsAfter(cursor: string | null, limit: number): Promise<ReplicationEvent[]>;
+  getReplicationQueue(cursor: string | null): Promise<{ pending: number; latestId: string | null }>;
   getUser(id: number): Promise<UserRecord | null>;
   getPaste(id: string): Promise<PasteRecord | null>;
 }
@@ -48,6 +49,8 @@ export interface ReplicationOptions {
 export interface ReplicationSummary {
   processed: number;
   cursor: string | null;
+  pending: number;
+  latestId: string | null;
 }
 
 const parsePositiveInteger = (value: string, name: string) => {
@@ -100,7 +103,7 @@ export const replicateBatch = async (
     await target.saveCursor("outbox", event.id);
     cursor = event.id;
   }
-  return { processed: events.length, cursor };
+  return { processed: events.length, cursor, ...(await source.getReplicationQueue(cursor)) };
 };
 
 export const runReplication = async (
@@ -117,7 +120,7 @@ export const runReplication = async (
   const interval = parsePositiveInteger(String(pollIntervalMs), "Replication poll interval");
   for (;;) {
     const summary = await replicateBatch(source, target, { batchSize });
-    if (summary.processed) onBatch?.(summary);
+    if (summary.processed || summary.pending) onBatch?.(summary);
     if (once || (drain && summary.processed === 0)) return summary;
     if (summary.processed === 0) await new Promise((resolve) => setTimeout(resolve, interval));
   }
@@ -128,12 +131,26 @@ export const runConfiguredReplication = async () => {
   try {
     const target = CloudflareTarget.fromEnv();
     const args = new Set(process.argv.slice(2));
+    let processedTotal = 0;
+    const startedAt = Date.now();
     return await runReplication(source, target, {
       batchSize: Number(process.env.REPLICATION_BATCH_SIZE ?? 100),
       pollIntervalMs: Number(process.env.REPLICATION_POLL_INTERVAL_MS ?? 1000),
       once: args.has("--once"),
       drain: args.has("--drain"),
-      onBatch: (summary) => console.log(JSON.stringify(summary)),
+      onBatch: (summary) => {
+        processedTotal += summary.processed;
+        const elapsedSeconds = Math.max((Date.now() - startedAt) / 1000, 0.001);
+        const ratePerSecond = processedTotal / elapsedSeconds;
+        console.log(
+          JSON.stringify({
+            ...summary,
+            processedTotal,
+            ratePerSecond: Math.round(ratePerSecond * 10) / 10,
+            etaSeconds: summary.pending === 0 ? 0 : Math.ceil(summary.pending / ratePerSecond),
+          }),
+        );
+      },
     });
   } finally {
     await source.close();

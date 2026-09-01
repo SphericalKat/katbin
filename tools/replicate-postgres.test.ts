@@ -45,6 +45,12 @@ class FakeSource implements ReplicationSource {
     return Promise.resolve(this.events.filter((event) => BigInt(event.id) > after).slice(0, limit));
   }
 
+  getReplicationQueue(cursor: string | null) {
+    const after = cursor === null ? 0n : BigInt(cursor);
+    const pending = this.events.filter((event) => BigInt(event.id) > after);
+    return Promise.resolve({ pending: pending.length, latestId: this.events.at(-1)?.id ?? null });
+  }
+
   getUser(id: number) {
     const value = this.users.get(id);
     return Promise.resolve(value ? { ...value } : null);
@@ -121,6 +127,8 @@ describe("PostgreSQL replication", () => {
     await expect(replicateBatch(source, target, { batchSize: 2 })).resolves.toEqual({
       processed: 2,
       cursor: "2",
+      pending: 3,
+      latestId: "5",
     });
     expect(target.users).toEqual(new Map([[7, user(7)]]));
     expect(target.pastes.get("paste")).toMatchObject(contentFor(paste("paste", largeContent, 7)));
@@ -130,6 +138,8 @@ describe("PostgreSQL replication", () => {
     await expect(replicateBatch(source, target, { batchSize: 2 })).resolves.toEqual({
       processed: 2,
       cursor: "4",
+      pending: 1,
+      latestId: "5",
     });
     expect(target.pastes).toEqual(new Map());
     expect(target.objects).toEqual(new Map());
@@ -137,6 +147,8 @@ describe("PostgreSQL replication", () => {
     await expect(replicateBatch(source, target, { batchSize: 2 })).resolves.toEqual({
       processed: 1,
       cursor: "5",
+      pending: 0,
+      latestId: "5",
     });
     expect(target.users).toEqual(new Map());
   });

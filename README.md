@@ -57,6 +57,8 @@ Run the initial copy with the relay stopped:
 MIGRATION_VALIDATE_TOTALS=false pnpm migrate
 ```
 
+Each migration line reports the resource, processed rows, remaining rows, rate, and ETA.
+
 Start the relay after the copy completes:
 
 ```sh
@@ -64,6 +66,7 @@ pnpm replicate
 ```
 
 The relay stores its event position in D1. It resumes safely after a restart.
+Each relay line reports processed events, pending events, rate, and ETA.
 
 Before cutover, stop writes to the old application. Stop the continuous relay, then drain the remaining events:
 
