@@ -41,7 +41,7 @@ jobs:
         run: vp test
 
       - name: Build the Worker
-        run: CLOUDFLARE_ENV=staging pnpm exec vite build
+        run: CLOUDFLARE_ENV=staging vp exec vite build
 
       - name: Apply staging D1 migrations
         run: vp exec wrangler d1 migrations apply DB --remote
