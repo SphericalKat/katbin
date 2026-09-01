@@ -541,7 +541,7 @@ const Header: FC<{ csrf?: string; user?: User | null }> = ({ csrf, user }) => (
   <header class="flex w-full items-center justify-between px-6 py-3">
     <a href="/">
       <span class="text-xl font-semibold tracking-tight">
-        <span class="text-amber">&lt;Kat</span>bin/&gt;
+        <span class="text-amber text-xl">&lt;Kat</span>bin/&gt;
       </span>
     </a>
     <nav aria-label="Account navigation">
