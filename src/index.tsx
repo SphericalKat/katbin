@@ -1,11 +1,17 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
+import { raw } from "hono/html";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { and, eq, gt } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import bcrypt from "bcryptjs";
+import hljs from "highlight.js/lib/common";
+import elixir from "highlight.js/lib/languages/elixir";
+import erlang from "highlight.js/lib/languages/erlang";
+import { marked } from "marked";
 import { scryptSync, timingSafeEqual } from "node:crypto";
+import sanitizeHtml from "sanitize-html";
 import { z } from "zod";
 
 import clientUrl from "./client.ts?url";
@@ -21,6 +27,69 @@ const securityHeaders = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
   "X-XSS-Protection": "0",
+};
+
+hljs.registerLanguage("elixir", elixir);
+hljs.registerLanguage("erlang", erlang);
+hljs.configure({ classPrefix: "" });
+
+const safeMarkdownHtml = (content: string) =>
+  sanitizeHtml(marked.parse(content, { async: false }), {
+    allowedTags: [
+      "a",
+      "blockquote",
+      "br",
+      "code",
+      "del",
+      "em",
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "h5",
+      "h6",
+      "hr",
+      "img",
+      "li",
+      "ol",
+      "p",
+      "pre",
+      "strong",
+      "table",
+      "tbody",
+      "td",
+      "th",
+      "thead",
+      "tr",
+      "ul",
+    ],
+    allowedAttributes: {
+      a: ["href", "title"],
+      img: ["src", "alt", "title"],
+    },
+    allowedSchemes: ["https"],
+    allowedSchemesByTag: { a: ["https"], img: ["https"] },
+  });
+
+const PasteContent: FC<{ content: string; extension: string }> = ({ content, extension }) => {
+  if (extension === "md") {
+    return (
+      <div class="break-word h-full w-full overflow-y-auto px-6 py-4 markdown">
+        {raw(safeMarkdownHtml(content))}
+      </div>
+    );
+  }
+
+  const language = hljs.getLanguage(extension);
+  if (!language) {
+    return <pre class="break-word whitespace-pre-wrap px-6 py-4">{content}</pre>;
+  }
+
+  return (
+    <pre class="break-word whitespace-pre-wrap px-6 py-4">
+      <code class="hljs">{raw(hljs.highlight(content, { language: extension }).value)}</code>
+    </pre>
+  );
 };
 
 type Bindings = {
@@ -426,7 +495,11 @@ const LoginPage: FC<{ csrf: string; error?: string }> = ({ csrf, error }) => (
   </>
 );
 
-const PastePage: FC<{ id: string; content: string }> = ({ id, content }) => (
+const PastePage: FC<{ id: string; content: string; extension: string }> = ({
+  id,
+  content,
+  extension,
+}) => (
   <html lang="en">
     <head>
       <meta charset="utf-8" />
@@ -437,7 +510,7 @@ const PastePage: FC<{ id: string; content: string }> = ({ id, content }) => (
     <body class="flex h-full flex-col">
       <Header />
       <main class="h-full w-full overflow-y-auto bg-light-grey">
-        <pre class="break-word whitespace-pre-wrap px-6 py-4">{content}</pre>
+        <PasteContent content={content} extension={extension} />
       </main>
       <Footer />
     </body>
@@ -717,14 +790,18 @@ app.get("/:id/raw", async (c) => {
 app.get("/v/:id", async (c) => {
   const result = await findPaste(c, c.req.param("id"));
   if (!result) return c.text("Not found", 404);
-  return c.html(<PastePage id={result.paste.id} content={result.paste.content} />);
+  return c.html(
+    <PastePage id={result.paste.id} content={result.paste.content} extension={result.extension} />,
+  );
 });
 
 app.get("/:id", async (c) => {
   const result = await findPaste(c, c.req.param("id"));
   if (!result) return c.text("Not found", 404);
   if (result.paste.isUrl) return c.redirect(result.paste.content.replace(/[\r\n]/g, ""), 302);
-  return c.html(<PastePage id={result.paste.id} content={result.paste.content} />);
+  return c.html(
+    <PastePage id={result.paste.id} content={result.paste.content} extension={result.extension} />,
+  );
 });
 
 function generateId() {

@@ -142,6 +142,53 @@ describe("Katbin shell", () => {
     expect(await mailtoDisplay.text()).toContain("mailto:user@example.com");
   });
 
+  it("renders safe Markdown, supported source, and escaped unsupported pastes", async () => {
+    const db = new TestDatabase();
+    const home = await app.request("https://katb.in/", undefined, { DB: db } as never);
+    const cookie = cookieFrom(home)!;
+    const csrf = csrfFrom(await home.text());
+    const create = async (content: string) => {
+      const response = await app.request(
+        "https://katb.in/",
+        formRequest(cookie, { _csrf: csrf, "paste[content]": content }),
+        { DB: db } as never,
+      );
+      return new URL(response.headers.get("location")!, "https://katb.in").pathname.slice(1);
+    };
+
+    const markdownId = await create(
+      '# Safe\n\n<script>alert("xss")</script>\n\n[link](https://example.com) ![image](https://example.com/image.png) [bad](javascript:alert(1))',
+    );
+    const elixirId = await create("defmodule Demo do\n  def run, do: :ok\nend");
+    const erlangId = await create("-module(demo).\n-export([run/0]).");
+    const unsupportedId = await create('<script>alert("escaped")</script>');
+
+    const markdown = await app.request(`https://katb.in/${markdownId}.md`, undefined, {
+      DB: db,
+    } as never);
+    const elixir = await app.request(`https://katb.in/${elixirId}.ex`, undefined, {
+      DB: db,
+    } as never);
+    const erlang = await app.request(`https://katb.in/${erlangId}.erl`, undefined, {
+      DB: db,
+    } as never);
+    const unsupported = await app.request(`https://katb.in/${unsupportedId}.wat`, undefined, {
+      DB: db,
+    } as never);
+    const markdownBody = await markdown.text();
+    const unsupportedBody = await unsupported.text();
+
+    expect(markdownBody).toContain("<h1");
+    expect(markdownBody).not.toContain("<script");
+    expect(markdownBody).toContain('href="https://example.com"');
+    expect(markdownBody).toContain('src="https://example.com/image.png"');
+    expect(markdownBody).not.toContain("javascript:");
+    expect(await elixir.text()).toContain('<span class="keyword">defmodule</span>');
+    expect(await erlang.text()).toContain('<span class="keyword">-module</span>');
+    expect(unsupportedBody).toContain("&lt;script&gt;alert(&quot;escaped&quot;)&lt;/script&gt;");
+    expect(unsupportedBody).not.toContain("<code");
+  });
+
   it("stores paste content in D1 or R2 at the UTF-8 threshold", async () => {
     const db = new TestDatabase();
     const bucket = new TestBucket();

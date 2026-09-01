@@ -1,3 +1,6 @@
+@import "../assets/css/highlight.css";
+@import "../assets/css/markdown.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
