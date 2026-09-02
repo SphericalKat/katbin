@@ -50,6 +50,26 @@ document.querySelectorAll("form").forEach((form) => {
   });
 });
 
+document.querySelectorAll("textarea[data-raw-url]").forEach((textarea) => {
+  const rawUrl = textarea.dataset.rawUrl;
+  if (!rawUrl) return;
+  void fetch(rawUrl)
+    .then((response) => {
+      if (!response.ok) throw new Error("Paste request failed");
+      return response.text();
+    })
+    .then((content) => {
+      textarea.value = content;
+      textarea.removeAttribute("aria-busy");
+      textarea.removeAttribute("placeholder");
+    })
+    .catch(() => {
+      textarea.value = "Unable to load paste.";
+      textarea.setAttribute("aria-invalid", "true");
+      textarea.removeAttribute("aria-busy");
+    });
+});
+
 document.addEventListener("keydown", (event) => {
   if (!(event.metaKey || event.ctrlKey) || event.key !== "Enter") return;
   if (!(event.target instanceof HTMLTextAreaElement)) return;

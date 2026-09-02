@@ -251,10 +251,10 @@ describe("Katbin shell", () => {
     expect(await bucket.text(abovePaste.storage_key!)).toBe(aboveContent);
     expect(
       await (await app.request(`https://katb.in/${aboveId}`, undefined, bindings)).text(),
-    ).toContain(aboveContent);
+    ).toContain(`data-raw-url="/${aboveId}/raw"`);
     expect(
       await (await app.request(`https://katb.in/v/${aboveId}`, undefined, bindings)).text(),
-    ).toContain(aboveContent);
+    ).toContain(`data-raw-url="/${aboveId}/raw"`);
     expect(
       await (await app.request(`https://katb.in/${aboveId}/raw`, undefined, bindings)).text(),
     ).toBe(aboveContent);
@@ -282,9 +282,11 @@ describe("Katbin shell", () => {
 
     expect(display.status).toBe(200);
     expect(body).toContain('aria-label="Paste content"');
+    expect(body).toContain('data-raw-url="/' + id + '/raw"');
     expect(body).toContain("readonly");
     expect(body).toContain('spellcheck="false"');
     expect(body).not.toContain('<pre class="break-word');
+    expect(body.length).toBeLessThan(100_000);
   });
 
   it("does not create a D1 reference when an R2 upload fails", async () => {
@@ -1214,6 +1216,7 @@ class TestDatabase {
                     [
                       row.id,
                       row.content,
+                      row.content_length_bytes,
                       row.is_url,
                       row.owner_id,
                       row.storage_type,
@@ -1228,6 +1231,7 @@ class TestDatabase {
               .map((row) => [
                 row.id,
                 row.content,
+                row.content_length_bytes,
                 row.is_url,
                 row.owner_id,
                 row.storage_type,
