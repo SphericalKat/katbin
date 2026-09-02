@@ -73,19 +73,25 @@ const safeMarkdownHtml = (content: string) =>
     allowedSchemesByTag: { a: ["https"], img: ["https"] },
   });
 
-const LARGE_PASTE_CHAR_LIMIT = 1_000_000;
+const LARGE_PASTE_BYTES = 1_000_000;
 
-const PasteContent: FC<{ content: string; extension: string }> = ({ content, extension }) => {
-  if (content.length > LARGE_PASTE_CHAR_LIMIT)
+const PasteContent: FC<{
+  content: string;
+  contentLengthBytes: number;
+  extension: string;
+  rawUrl: string;
+}> = ({ content, contentLengthBytes, extension, rawUrl }) => {
+  if (contentLengthBytes > LARGE_PASTE_BYTES)
     return (
       <textarea
         class="h-full w-full resize-none bg-light-grey px-6 py-4 font-bold outline-none"
         aria-label="Paste content"
+        aria-busy="true"
+        data-raw-url={rawUrl}
+        placeholder="Loading paste..."
         readonly
         spellcheck={false}
-      >
-        {content}
-      </textarea>
+      ></textarea>
     );
 
   if (extension === "md") {
@@ -1045,12 +1051,14 @@ const SettingsPage: FC<{
 const PastePage: FC<{
   id: string;
   content: string;
+  contentLengthBytes: number;
   extension: string;
+  rawUrl: string;
   csrf?: string;
   user?: User | null;
   showEdit?: boolean;
   error?: string;
-}> = ({ id, content, extension, csrf, user, showEdit, error }) => (
+}> = ({ id, content, contentLengthBytes, extension, rawUrl, csrf, user, showEdit, error }) => (
   <html lang="en">
     <head>
       <meta charset="utf-8" />
@@ -1082,7 +1090,12 @@ const PastePage: FC<{
               </a>
             </div>
           ) : null}
-          <PasteContent content={content} extension={extension} />
+          <PasteContent
+            content={content}
+            contentLengthBytes={contentLengthBytes}
+            extension={extension}
+            rawUrl={rawUrl}
+          />
         </div>
       </main>
       <Footer />
@@ -1820,7 +1833,7 @@ app.post("/", async (c) => {
   return c.redirect(`${urlPaste ? "/v" : ""}/${id}`, 303);
 });
 
-const findPaste = async (c: AppContext, value: string) => {
+const findPaste = async (c: AppContext, value: string, includeContent = true) => {
   const path = pastePath(value);
   if (!path) return null;
   const findById = (id: string) =>
@@ -1828,6 +1841,7 @@ const findPaste = async (c: AppContext, value: string) => {
       .select({
         id: pastes.id,
         content: pastes.content,
+        contentLengthBytes: pastes.contentLengthBytes,
         isUrl: pastes.isUrl,
         ownerId: pastes.ownerId,
         storageType: pastes.storageType,
@@ -1845,7 +1859,7 @@ const findPaste = async (c: AppContext, value: string) => {
     const object = await c.env.PASTES.get(paste.storageKey);
     if (!object) return null;
     return {
-      paste: { ...paste, content: await object.text() },
+      paste: { ...paste, content: includeContent ? await object.text() : "" },
       extension: path.extension,
     };
   }
@@ -1942,7 +1956,7 @@ app.get("/:id/raw", async (c) => {
 });
 
 app.get("/v/:id", async (c) => {
-  const result = await findPaste(c, c.req.param("id"));
+  const result = await findPaste(c, c.req.param("id"), false);
   if (!result) return c.text("Not found", 404);
   const { token, session } = await sessionFromRequest(c);
   const user = await getCurrentUser(c.env, session);
@@ -1950,7 +1964,9 @@ app.get("/v/:id", async (c) => {
     <PastePage
       id={result.paste.id}
       content={result.paste.content}
+      contentLengthBytes={result.paste.contentLengthBytes}
       extension={result.extension}
+      rawUrl={`/${result.paste.id}/raw`}
       csrf={token && session ? await csrfToken(token) : undefined}
       user={user}
       showEdit={user?.id === result.paste.ownerId}
@@ -1960,7 +1976,7 @@ app.get("/v/:id", async (c) => {
 });
 
 app.get("/:id", async (c) => {
-  const result = await findPaste(c, c.req.param("id"));
+  const result = await findPaste(c, c.req.param("id"), false);
   if (!result) return c.text("Not found", 404);
   if (result.paste.isUrl) return c.redirect(result.paste.content.replace(/[\r\n]/g, ""), 302);
   const { token, session } = await sessionFromRequest(c);
@@ -1969,7 +1985,9 @@ app.get("/:id", async (c) => {
     <PastePage
       id={result.paste.id}
       content={result.paste.content}
+      contentLengthBytes={result.paste.contentLengthBytes}
       extension={result.extension}
+      rawUrl={`/${result.paste.id}/raw`}
       csrf={token && session ? await csrfToken(token) : undefined}
       user={user}
       showEdit={user?.id === result.paste.ownerId}
