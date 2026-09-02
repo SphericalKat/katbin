@@ -1078,8 +1078,25 @@ const PastePage: FC<{
           <p class="alert alert-danger">{error}</p>
         ) : null}
         <div class="relative flex h-full w-full flex-col">
-          {showEdit ? (
-            <div class="absolute right-0 top-0 flex p-4">
+          <div class="absolute right-0 top-0 flex items-center gap-2 p-4">
+            <button
+              type="button"
+              class="flex h-11 w-11 items-center justify-center rounded-sm"
+              aria-label="Copy original paste content"
+              title="Copy original paste content"
+              data-copy-raw-url={rawUrl}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                class="h-6 w-6 fill-current text-white hover:text-amber"
+                aria-hidden="true"
+              >
+                <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
+              </svg>
+            </button>
+            <span role="status" aria-live="polite"></span>
+            {showEdit ? (
               <a href={`/edit/${id}`} aria-label="Edit paste" title="Edit paste">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -1090,8 +1107,8 @@ const PastePage: FC<{
                   <path d="M3 17.46v3.04c0 .28.22.5.5.5h3.04c.13 0 .26-.05.35-.15L17.81 9.94l-3.75-3.75L3.15 17.1c-.1.1-.15.22-.15.36zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
                 </svg>
               </a>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
           <PasteContent
             content={content}
             contentLengthBytes={contentLengthBytes}

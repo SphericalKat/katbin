@@ -50,14 +50,16 @@ document.querySelectorAll("form").forEach((form) => {
   });
 });
 
+const fetchText = async (url) => {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("Paste request failed");
+  return response.text();
+};
+
 document.querySelectorAll("textarea[data-raw-url]").forEach((textarea) => {
   const rawUrl = textarea.dataset.rawUrl;
   if (!rawUrl) return;
-  void fetch(rawUrl)
-    .then((response) => {
-      if (!response.ok) throw new Error("Paste request failed");
-      return response.text();
-    })
+  void fetchText(rawUrl)
     .then((content) => {
       textarea.value = content;
       textarea.removeAttribute("aria-busy");
@@ -69,6 +71,37 @@ document.querySelectorAll("textarea[data-raw-url]").forEach((textarea) => {
       textarea.removeAttribute("aria-busy");
     });
 });
+
+const reportCopy = (button, message) => {
+  const feedback = button.parentElement?.querySelector('[role="status"]');
+  if (feedback) feedback.textContent = message;
+};
+
+const registerPasteCopyHandlers = () => {
+  document.querySelectorAll("[data-copy-raw-url]").forEach((button) => {
+    const rawUrl = button.dataset.copyRawUrl;
+    let content;
+    if (rawUrl) {
+      // Fetch the original paste content when the page loads. The click handler
+      // then writes to the clipboard without an async gap, which some browsers
+      // treat as lost user activation.
+      void fetchText(rawUrl)
+        .then((value) => {
+          content = value;
+        })
+        .catch(() => {});
+    }
+    button.addEventListener("click", () => {
+      if (content === undefined) return reportCopy(button, "Copy failed");
+      void navigator.clipboard
+        .writeText(content)
+        .then(() => reportCopy(button, "Copied"))
+        .catch(() => reportCopy(button, "Copy failed"));
+    });
+  });
+};
+
+registerPasteCopyHandlers();
 
 document.addEventListener("keydown", (event) => {
   if (!(event.metaKey || event.ctrlKey) || event.key !== "Enter") return;
