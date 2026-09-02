@@ -73,7 +73,21 @@ const safeMarkdownHtml = (content: string) =>
     allowedSchemesByTag: { a: ["https"], img: ["https"] },
   });
 
+const LARGE_PASTE_CHAR_LIMIT = 1_000_000;
+
 const PasteContent: FC<{ content: string; extension: string }> = ({ content, extension }) => {
+  if (content.length > LARGE_PASTE_CHAR_LIMIT)
+    return (
+      <textarea
+        class="h-full w-full resize-none bg-light-grey px-6 py-4 font-bold outline-none"
+        aria-label="Paste content"
+        readonly
+        spellcheck={false}
+      >
+        {content}
+      </textarea>
+    );
+
   if (extension === "md") {
     return (
       <div class="break-word h-full w-full overflow-y-auto px-6 py-4 markdown">
