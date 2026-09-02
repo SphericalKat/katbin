@@ -75,6 +75,21 @@ describe("Katbin shell", () => {
     expect(limiter.keys).toEqual(["203.0.113.4"]);
   });
 
+  it("rejects raw paste fetches when the Cloudflare limiter denies the IP", async () => {
+    const db = new TestDatabase();
+    db.addPaste({ id: "limited", content: "private" });
+    const limiter = new TestRateLimit(false);
+    const response = await app.request(
+      "https://katb.in/limited/raw",
+      { headers: { "CF-Connecting-IP": "203.0.113.4" } },
+      { DB: db, FETCH_PASTE_LIMITER: limiter } as never,
+    );
+
+    expect(response.status).toBe(429);
+    expect(await response.text()).toBe("Too many requests");
+    expect(limiter.keys).toEqual(["203.0.113.4"]);
+  });
+
   it("rejects missing pastes and invalid input", async () => {
     const db = new TestDatabase();
     expect(
