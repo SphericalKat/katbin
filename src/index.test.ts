@@ -1529,3 +1529,96 @@ describe("owned pastes", () => {
     expect(db.paste("editable")?.content).toBe("small again");
   });
 });
+
+describe("copy action", () => {
+  it("offers the copy action to every viewer and copies the original paste content exactly", async () => {
+    const db = new TestDatabase();
+    const owner = await loginAs(db, "owner@example.com");
+    const other = await loginAs(db, "other@example.com");
+    const created = await app.request(
+      "https://katb.in/",
+      formRequest(owner.cookie, {
+        _csrf: owner.csrf,
+        "paste[content]": "exact paste content",
+        "paste[custom_url]": "copyable",
+      }),
+      { DB: db } as never,
+    );
+    expect(created.status).toBe(303);
+
+    for (const viewerCookies of [undefined, other.cookie]) {
+      const view = await app.request(
+        "https://katb.in/v/copyable",
+        viewerCookies ? { headers: { Cookie: viewerCookies } } : undefined,
+        { DB: db } as never,
+      );
+      const body = await view.text();
+      expect(body).toContain('data-copy-raw-url="/copyable/raw"');
+      expect(body).toContain('aria-label="Copy original paste content"');
+    }
+    expect(
+      await (
+        await app.request("https://katb.in/copyable/raw", undefined, { DB: db } as never)
+      ).text(),
+    ).toBe("exact paste content");
+  });
+
+  it("places the copy action before the owner-only edit action", async () => {
+    const db = new TestDatabase();
+    const owner = await loginAs(db, "owner@example.com");
+    await app.request(
+      "https://katb.in/",
+      formRequest(owner.cookie, {
+        _csrf: owner.csrf,
+        "paste[content]": "owned content",
+        "paste[custom_url]": "ordered",
+      }),
+      { DB: db } as never,
+    );
+    const view = await app.request(
+      "https://katb.in/v/ordered",
+      { headers: { Cookie: owner.cookie } },
+      { DB: db } as never,
+    );
+    const body = await view.text();
+    const copyIndex = body.indexOf('data-copy-raw-url="/ordered/raw"');
+    const editIndex = body.indexOf("/edit/ordered");
+    expect(copyIndex).toBeGreaterThanOrEqual(0);
+    expect(editIndex).toBeGreaterThan(copyIndex);
+  });
+
+  it("copies the original paste content across plain, Markdown, URL, and large pastes", async () => {
+    const db = new TestDatabase();
+    const bucket = new TestBucket();
+    const bindings = { DB: db, PASTES: bucket } as never;
+    const home = await app.request("https://katb.in/", undefined, bindings);
+    const cookie = cookieFrom(home)!;
+    const csrf = csrfFrom(await home.text());
+    const create = async (content: string) => {
+      const response = await app.request(
+        "https://katb.in/",
+        formRequest(cookie, { _csrf: csrf, "paste[content]": content }),
+        bindings,
+      );
+      const id = new URL(response.headers.get("location")!, "https://katb.in").pathname
+        .split("/")
+        .filter(Boolean)
+        .at(-1);
+      return { id, content };
+    };
+
+    const pastes = [
+      await create("plain text"),
+      await create("# Heading\n\nMarkdown source"),
+      await create("https://example.com/docs"),
+      await create("x".repeat(1_000_001)),
+    ];
+
+    for (const { id, content } of pastes) {
+      const view = await app.request(`https://katb.in/v/${id}`, undefined, bindings);
+      expect(await view.text()).toContain(`data-copy-raw-url="/${id}/raw"`);
+      const raw = await app.request(`https://katb.in/${id}/raw`, undefined, bindings);
+      expect(await raw.text()).toBe(content);
+    }
+  });
+});
