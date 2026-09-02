@@ -19,7 +19,7 @@ jobs:
     environment: staging
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Vite+
         uses: voidzero-dev/setup-vp@v1.16.1
