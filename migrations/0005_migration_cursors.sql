@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS migration_cursors (
+  name TEXT PRIMARY KEY NOT NULL,
+  cursor TEXT NOT NULL
+);

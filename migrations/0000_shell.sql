@@ -1,0 +1,1 @@
+-- The shell does not require application tables yet.

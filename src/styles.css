@@ -1,0 +1,110 @@
+@import "../assets/css/highlight.css";
+@import "../assets/css/markdown.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains_mono_variable.ttf");
+  font-weight: 100 1000;
+  font-stretch: 25% 151%;
+}
+
+@layer base {
+  [hidden],
+  [x-cloak] {
+    display: none !important;
+  }
+
+  * {
+    color: white;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 14px;
+    font-weight: bold;
+    font-variant-ligatures: none;
+  }
+
+  html,
+  body {
+    height: 100%;
+    width: 100%;
+  }
+
+  a {
+    color: #ff9800;
+  }
+
+  a:hover {
+    color: #ff9800;
+    text-decoration: underline;
+  }
+
+  header {
+    background-color: #1a1a1a;
+  }
+
+  main {
+    background-color: #212121;
+  }
+
+  textarea {
+    font-size: 14px;
+  }
+}
+
+@layer components {
+  .alert {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0.5rem 1rem;
+    text-align: center;
+  }
+
+  .alert-info {
+    background-color: #1ed98e;
+    color: black;
+  }
+
+  .alert-danger {
+    background-color: #ff9800;
+    color: black;
+  }
+}
+
+button.is-loading {
+  cursor: wait;
+  opacity: 0.8;
+}
+
+button.is-loading::after {
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  margin-left: 0.6em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  content: "";
+  animation: spin 0.7s linear infinite;
+  vertical-align: -0.1em;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.is-loading::after {
+    animation: none;
+  }
+}
+
+@layer utilities {
+  .bg-header {
+    background-color: #1a1a1a;
+  }
+}

@@ -1,52 +1,78 @@
 # Katbin
 
-To start your Phoenix server:
+Katbin is a Vite+ application with one Hono Worker. It uses D1 for relational data, R2 for large pastes, and Email Service for account email.
 
-  * Copy `config/dev.secret.sample.exs` to `config/dev.secret.exs`
-  * Fill in the SMTP and database configuration in `config/dev.secret.exs`
-  * Install dependencies with `mix deps.get`
-  * Create and migrate your database with `mix ecto.setup`
-  * Install Node.js dependencies with `npm install` inside the `assets` directory
-  * Start Phoenix endpoint with `mix phx.server`
+## Local development
 
-Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
+Install the dependencies:
 
-# Self hosting
-
-We recommend using our [official docker image](https://hub.docker.com/r/atechnohazard/katbin-elixir). If you wish to build your own docker image, the provided Dockerfile should work out of the box. If you run into any problems, please open an issue.
-
-## Populating the environment
-Copy the provided `sample.env` file to `.env`
 ```sh
-cp sample.env .env
+pnpm install
 ```
 
-Fill in this new file with the required environment variables.
+Start the local Worker:
 
-## Using the official docker image
 ```sh
-docker run --env-file .env atechnohazard/katbin-elixir
+pnpm dev
 ```
 
-## Building the docker image
+The local Worker uses local D1 and R2 storage. Add local secrets to `.dev.vars` when a command needs them.
+
+## Checks
+
 ```sh
-git clone https://github.com/SphericalKat/katbin
-cd katbin
-docker build -t <username>/katbin .
+pnpm test
+pnpm check
+pnpm types
+pnpm build
 ```
 
-## Running the built docker image
+## PostgreSQL migration and replication
+
+The temporary migration stack copies users and pastes from PostgreSQL to D1 and R2.
+It uses PostgreSQL triggers and a Node relay for changes that happen after the copy starts.
+
+Set these variables in the shell that runs the migration commands:
+
 ```sh
-docker run --env-file .env <username>/katbin
+export POSTGRES_URL="..."
+export CLOUDFLARE_ACCOUNT_ID="..."
+export CLOUDFLARE_API_TOKEN="..."
+export D1_DATABASE_ID="..."
+export R2_BUCKET_NAME="..."
+export R2_ACCESS_KEY_ID="..."
+export R2_SECRET_ACCESS_KEY="..."
+export R2_ENDPOINT="https://<account-id>.r2.cloudflarestorage.com"
 ```
 
-For other methods of self hosting, please check the [official Phoenix deployment guides](https://hexdocs.pm/phoenix/deployment.html).
+Install the PostgreSQL triggers before the first copy:
 
+```sh
+pnpm replication:install
+```
 
-## Learn more
+Run the initial copy with the relay stopped:
 
-  * Official website: https://www.phoenixframework.org/
-  * Guides: https://hexdocs.pm/phoenix/overview.html
-  * Docs: https://hexdocs.pm/phoenix
-  * Forum: https://elixirforum.com/c/phoenix-forum
-  * Source: https://github.com/phoenixframework/phoenix
+```sh
+MIGRATION_BATCH_SIZE=100 MIGRATION_VALIDATE_RECORDS=false MIGRATION_VALIDATE_TOTALS=false pnpm migrate
+```
+
+This fast mode keeps batch and upload errors fatal. It skips per-row D1 readback validation.
+Each migration line reports the resource, processed rows, remaining rows, rate, and ETA.
+
+Start the relay after the copy completes:
+
+```sh
+pnpm replicate
+```
+
+The relay stores its event position in D1. It resumes safely after a restart.
+Each relay line reports processed events, pending events, rate, and ETA.
+
+Before cutover, stop writes to the old application. Stop the continuous relay, then drain the remaining events:
+
+```sh
+pnpm replicate -- --drain
+```
+
+After the drain completes, verify the D1 data and switch traffic to the production Worker.

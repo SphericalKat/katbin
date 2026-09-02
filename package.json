@@ -1,0 +1,43 @@
+{
+  "name": "katbin",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev",
+    "check": "vp check src vite.config.ts",
+    "test": "vp test",
+    "build": "vp build",
+    "types": "vp exec tsc --noEmit",
+    "migrate": "node tools/migrate-postgres.ts",
+    "replication:install": "node tools/install-postgres-replication.ts",
+    "replicate": "node tools/replicate-postgres.ts"
+  },
+  "dependencies": {
+    "@alpinejs/csp": "3.17.1",
+    "bcryptjs": "3.0.2",
+    "drizzle-orm": "^0.45.2",
+    "highlight.js": "^11.12.0",
+    "hono": "4.13.5",
+    "marked": "^18.0.11",
+    "sanitize-html": "^2.17.7",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.54.2",
+    "@cloudflare/workers-types": "5.20260901.1",
+    "@types/node": "24.13.3",
+    "@types/pg": "^8.15.6",
+    "@types/sanitize-html": "^2.16.1",
+    "autoprefixer": "10.4.21",
+    "postcss": "8.5.6",
+    "pg": "^8.16.3",
+    "tailwindcss": "3.4.19",
+    "typescript": "5.9.2",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.0",
+    "vite-plus": "0.3.0",
+    "vitest": "4.1.11",
+    "wrangler": "4.127.1"
+  },
+  "packageManager": "pnpm@10.24.0"
+}

@@ -1,0 +1,162 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "katbin-local",
+  "main": "./src/index.tsx",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "ENVIRONMENT": "local",
+    "APPROVED_EMAIL_RECIPIENTS": "",
+  },
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "allowed_sender_addresses": ["noreply@katb.in"],
+      "remote": false,
+    },
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "katbin-local",
+      "database_id": "local",
+      "migrations_dir": "./migrations",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "PASTES",
+      "bucket_name": "katbin-local",
+    },
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "head_sampling_rate": 1,
+    },
+  },
+  "env": {
+    "staging": {
+      "name": "katbin-staging",
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "APPROVED_EMAIL_RECIPIENTS": "amolele@gmail.com",
+      },
+      "send_email": [
+        {
+          "name": "EMAIL",
+          "allowed_sender_addresses": ["noreply@katb.in"],
+          "remote": true,
+        },
+      ],
+      "routes": [
+        {
+          "pattern": "staging.katb.in",
+          "custom_domain": true,
+        },
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "katbin-staging",
+          "database_id": "575769c4-9491-4aee-a04b-a07ad0a903c8",
+          "migrations_dir": "./migrations",
+        },
+      ],
+      "r2_buckets": [
+        {
+          "binding": "PASTES",
+          "bucket_name": "katbin-staging",
+        },
+      ],
+      "ratelimits": [
+        {
+          "name": "BROWSER_PASTE_LIMITER",
+          "namespace_id": "5201",
+          "simple": {"limit": 30, "period": 60},
+        },
+        {
+          "name": "API_PASTE_LIMITER",
+          "namespace_id": "5202",
+          "simple": {"limit": 60, "period": 60},
+        },
+        {
+          "name": "LOGIN_LIMITER",
+          "namespace_id": "5203",
+          "simple": {"limit": 10, "period": 60},
+        },
+        {
+          "name": "REGISTRATION_LIMITER",
+          "namespace_id": "5204",
+          "simple": {"limit": 5, "period": 60},
+        },
+        {
+          "name": "ACCOUNT_EMAIL_LIMITER",
+          "namespace_id": "5205",
+          "simple": {"limit": 5, "period": 60},
+        },
+      ],
+    },
+    "production": {
+      "name": "katbin-production",
+      "vars": {
+        "ENVIRONMENT": "production",
+      },
+      "workers_dev": false,
+      "routes": [
+        {
+          "pattern": "katb.in",
+          "custom_domain": true,
+        },
+      ],
+      "send_email": [
+        {
+          "name": "EMAIL",
+          "allowed_sender_addresses": ["noreply@katb.in"],
+          "remote": true,
+        },
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "katbin-production",
+          "database_id": "0a13c839-25d4-409f-9f19-5c2477b05bec",
+          "migrations_dir": "./migrations",
+        },
+      ],
+      "r2_buckets": [
+        {
+          "binding": "PASTES",
+          "bucket_name": "katbin-production",
+        },
+      ],
+      "ratelimits": [
+        {
+          "name": "BROWSER_PASTE_LIMITER",
+          "namespace_id": "5201",
+          "simple": {"limit": 30, "period": 60},
+        },
+        {
+          "name": "API_PASTE_LIMITER",
+          "namespace_id": "5202",
+          "simple": {"limit": 60, "period": 60},
+        },
+        {
+          "name": "LOGIN_LIMITER",
+          "namespace_id": "5203",
+          "simple": {"limit": 10, "period": 60},
+        },
+        {
+          "name": "REGISTRATION_LIMITER",
+          "namespace_id": "5204",
+          "simple": {"limit": 5, "period": 60},
+        },
+        {
+          "name": "ACCOUNT_EMAIL_LIMITER",
+          "namespace_id": "5205",
+          "simple": {"limit": 5, "period": 60},
+        },
+      ],
+    },
+  },
+}

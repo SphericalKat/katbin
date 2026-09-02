@@ -1,0 +1,1 @@
+export const R2_THRESHOLD_BYTES = 1_000_000;
