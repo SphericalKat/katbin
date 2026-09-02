@@ -263,6 +263,30 @@ describe("Katbin shell", () => {
     ).toBe(aboveContent);
   });
 
+  it("uses a native viewer for very large pastes", async () => {
+    const db = new TestDatabase();
+    const bucket = new TestBucket();
+    const bindings = { DB: db, PASTES: bucket } as never;
+    const home = await app.request("https://katb.in/", undefined, bindings);
+    const response = await app.request(
+      "https://katb.in/",
+      formRequest(cookieFrom(home)!, {
+        _csrf: csrfFrom(await home.text()),
+        "paste[content]": "x".repeat(1_000_001),
+      }),
+      bindings,
+    );
+    const id = new URL(response.headers.get("location")!, "https://katb.in").pathname.slice(1);
+    const display = await app.request(`https://katb.in/${id}`, undefined, bindings);
+    const body = await display.text();
+
+    expect(display.status).toBe(200);
+    expect(body).toContain('aria-label="Paste content"');
+    expect(body).toContain("readonly");
+    expect(body).toContain('spellcheck="false"');
+    expect(body).not.toContain('<pre class="break-word');
+  });
+
   it("does not create a D1 reference when an R2 upload fails", async () => {
     const db = new TestDatabase();
     const bucket = new TestBucket(true);
