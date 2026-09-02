@@ -76,6 +76,11 @@
           "simple": {"limit": 30, "period": 60},
         },
         {
+          "name": "FETCH_PASTE_LIMITER",
+          "namespace_id": "5206",
+          "simple": {"limit": 60, "period": 60},
+        },
+        {
           "name": "API_PASTE_LIMITER",
           "namespace_id": "5202",
           "simple": {"limit": 60, "period": 60},
@@ -135,6 +140,11 @@
           "name": "BROWSER_PASTE_LIMITER",
           "namespace_id": "5201",
           "simple": {"limit": 30, "period": 60},
+        },
+        {
+          "name": "FETCH_PASTE_LIMITER",
+          "namespace_id": "5206",
+          "simple": {"limit": 60, "period": 60},
         },
         {
           "name": "API_PASTE_LIMITER",

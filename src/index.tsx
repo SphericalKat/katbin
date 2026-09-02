@@ -121,6 +121,7 @@ type Bindings = {
   APPROVED_EMAIL_RECIPIENTS?: string;
   PASTES: R2Bucket;
   BROWSER_PASTE_LIMITER?: RateLimit;
+  FETCH_PASTE_LIMITER?: RateLimit;
   API_PASTE_LIMITER?: RateLimit;
   LOGIN_LIMITER?: RateLimit;
   REGISTRATION_LIMITER?: RateLimit;
@@ -1950,6 +1951,8 @@ app.on(["PATCH", "PUT"], "/:id", async (c) => {
 });
 
 app.get("/:id/raw", async (c) => {
+  if (!(await requestAllowed(c, c.env.FETCH_PASTE_LIMITER)))
+    return c.text("Too many requests", 429);
   const result = await findPaste(c, c.req.param("id"));
   if (!result) return c.text("Not found", 404);
   return c.text(result.paste.content, 200, { "Content-Type": "text/plain; charset=UTF-8" });
