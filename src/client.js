@@ -36,7 +36,8 @@ document.querySelectorAll("form").forEach((form) => {
     new FormData(form).forEach((value, key) => {
       if (typeof value === "string") body.append(key, value);
     });
-    void fetch(form.action, {
+    const action = form.getAttribute("action");
+    void fetch(action, {
       method: form.dataset.method,
       body,
     })
