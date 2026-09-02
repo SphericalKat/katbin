@@ -90,6 +90,25 @@ describe("Katbin shell", () => {
     expect(limiter.keys).toEqual(["203.0.113.4"]);
   });
 
+  it("rate limits missing raw pastes separately", async () => {
+    const fetchLimiter = new TestRateLimit(true);
+    const notFoundLimiter = new TestRateLimit(false);
+    const response = await app.request(
+      "https://katb.in/missing/raw",
+      { headers: { "CF-Connecting-IP": "203.0.113.4" } },
+      {
+        DB: new TestDatabase(),
+        FETCH_PASTE_LIMITER: fetchLimiter,
+        NOT_FOUND_LIMITER: notFoundLimiter,
+      } as never,
+    );
+
+    expect(response.status).toBe(429);
+    expect(await response.text()).toBe("Too many invalid paste requests");
+    expect(fetchLimiter.keys).toEqual(["203.0.113.4"]);
+    expect(notFoundLimiter.keys).toEqual(["203.0.113.4"]);
+  });
+
   it("rejects missing pastes and invalid input", async () => {
     const db = new TestDatabase();
     expect(
