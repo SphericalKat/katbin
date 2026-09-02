@@ -1,22 +1,26 @@
 import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-export const pastes = sqliteTable("pastes", {
-  id: text("id").primaryKey(),
-  content: text("content").notNull(),
-  isUrl: integer("is_url", { mode: "boolean" }).notNull().default(false),
-  ownerId: integer("owner_id"),
-  storageType: text("storage_type").notNull().default("d1"),
-  storageKey: text("storage_key"),
-  contentLengthBytes: integer("content_length_bytes").notNull(),
-  contentSha256: text("content_sha256").notNull(),
-  createdAt: text("created_at")
-    .notNull()
-    .default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: text("updated_at")
-    .notNull()
-    .default(sql`CURRENT_TIMESTAMP`),
-});
+export const pastes = sqliteTable(
+  "pastes",
+  {
+    id: text("id").primaryKey(),
+    content: text("content").notNull(),
+    isUrl: integer("is_url", { mode: "boolean" }).notNull().default(false),
+    ownerId: integer("owner_id"),
+    storageType: text("storage_type").notNull().default("d1"),
+    storageKey: text("storage_key"),
+    contentLengthBytes: integer("content_length_bytes").notNull(),
+    contentSha256: text("content_sha256").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("pastes_owner_id_index").on(table.ownerId)],
+);
 
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
