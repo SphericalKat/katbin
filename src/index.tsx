@@ -1088,11 +1088,11 @@ const PastePage: FC<{
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
+                viewBox="0 0 256 256"
                 class="h-6 w-6 fill-current text-white hover:text-amber"
                 aria-hidden="true"
               >
-                <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
+                <path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z" />
               </svg>
             </button>
             <span role="status" aria-live="polite"></span>
@@ -1105,11 +1105,11 @@ const PastePage: FC<{
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  class="h-6 w-6 cursor-pointer fill-current text-white"
+                  viewBox="0 0 256 256"
+                  class="h-6 w-6 cursor-pointer fill-current text-white hover:text-amber"
                   aria-hidden="true"
                 >
-                  <path d="M3 17.46v3.04c0 .28.22.5.5.5h3.04c.13 0 .26-.05.35-.15L17.81 9.94l-3.75-3.75L3.15 17.1c-.1.1-.15.22-.15.36zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+                  <path d="M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z" />
                 </svg>
               </a>
             ) : null}
@@ -1129,11 +1129,11 @@ const PastePage: FC<{
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    class="h-6 w-6 cursor-pointer fill-current text-white"
+                    viewBox="0 0 256 256"
+                    class="h-6 w-6 cursor-pointer fill-current text-white hover:text-amber"
                     aria-hidden="true"
                   >
-                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                    <path d="M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1,16,0V104a8,8,0,0,1,16,0Z" />
                   </svg>
                 </button>
               </form>
@@ -1168,10 +1168,10 @@ const PastesPage: FC<{ csrf: string; user: User; pastes: Array<{ id: string }> }
     <body class="flex h-full flex-col">
       <Header csrf={csrf} user={user} />
       <main class="flex h-full w-full flex-col overflow-hidden bg-light-grey">
-        <ul class="h-full w-full overflow-y-auto px-6 py-4">
+        <ul class="h-full w-fit overflow-y-auto px-6 py-4">
           {pastes.map((paste) => (
             <li class="flex items-center justify-between gap-4">
-              <a class="min-w-0 flex-1 truncate" href={`/v/${paste.id}`}>
+              <a class="min-w-0 truncate" href={`/v/${paste.id}`}>
                 https://katb.in/v/{paste.id}
               </a>
               <form
