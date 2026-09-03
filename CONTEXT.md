@@ -19,3 +19,15 @@ _Avoid_: Copy animation, clipboard toast
 **Copy action**:
 An action on the saved paste page that places the original paste content in the person's clipboard.
 _Avoid_: Copy rendered view
+
+**Owned paste**:
+A paste created by a logged-in person.
+_Avoid_: User paste, my paste
+
+**Delete action**:
+An action on the saved paste page and My Pastes list that deletes an owned paste.
+_Avoid_: Remove button, destroy action
+
+**Deleted paste**:
+A paste that no longer appears on read, list, or edit surfaces.
+_Avoid_: Removed paste, trashed paste

@@ -400,7 +400,7 @@ export class PostgresSource implements SourceAdapter {
               ${timestamp("confirmed_at")} AS "confirmedAt",
               ${timestamp("inserted_at")} AS "insertedAt",
               ${timestamp("updated_at")} AS "updatedAt"
-         FROM users ${where} ORDER BY id ASC LIMIT $${values.length}`,
+         FROM users ${where} ORDER BY users.id ASC LIMIT $${values.length}`,
       values,
     );
     return rows.map((row) => ({

@@ -18,6 +18,7 @@ export const pastes = sqliteTable(
     updatedAt: text("updated_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
+    deletedAt: text("deleted_at"),
   },
   (table) => [index("pastes_owner_id_index").on(table.ownerId)],
 );
