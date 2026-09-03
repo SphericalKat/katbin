@@ -1320,7 +1320,17 @@ app.post("/users/register", async (c) => {
   const parsed = registrationFormSchema.safeParse(form);
   if (!parsed.success)
     return c.html(
-      <RegistrationPage csrf={await csrfToken(token)} errors={formErrors(parsed.error)} />,
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Register | Katbin</title>
+          <link rel="stylesheet" href={stylesheetUrl} />
+        </head>
+        <body class="flex h-full flex-col">
+          <RegistrationPage csrf={await csrfToken(token)} errors={formErrors(parsed.error)} />
+        </body>
+      </html>,
     );
   const email = parsed.data["user[email]"];
   const normalizedEmail = email.toLowerCase();
@@ -1333,11 +1343,21 @@ app.post("/users/register", async (c) => {
       .get()
   )
     return c.html(
-      <RegistrationPage
-        csrf={await csrfToken(token)}
-        email={email}
-        errors={{ email: ["has already been taken"] }}
-      />,
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Register | Katbin</title>
+          <link rel="stylesheet" href={stylesheetUrl} />
+        </head>
+        <body class="flex h-full flex-col">
+          <RegistrationPage
+            csrf={await csrfToken(token)}
+            email={email}
+            errors={{ email: ["has already been taken"] }}
+          />
+        </body>
+      </html>,
     );
   try {
     await db.insert(users).values({
@@ -1348,11 +1368,21 @@ app.post("/users/register", async (c) => {
   } catch (error) {
     if (String(error).toLowerCase().includes("unique"))
       return c.html(
-        <RegistrationPage
-          csrf={await csrfToken(token)}
-          email={email}
-          errors={{ email: ["has already been taken"] }}
-        />,
+        <html lang="en">
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Register | Katbin</title>
+            <link rel="stylesheet" href={stylesheetUrl} />
+          </head>
+          <body class="flex h-full flex-col">
+            <RegistrationPage
+              csrf={await csrfToken(token)}
+              email={email}
+              errors={{ email: ["has already been taken"] }}
+            />
+          </body>
+        </html>,
       );
     throw error;
   }
@@ -1526,11 +1556,21 @@ app.put("/users/reset_password/:token", async (c) => {
   const token = c.req.param("token");
   if (!parsed.success)
     return c.html(
-      <ResetPasswordPage
-        csrf={await csrfToken(sessionToken)}
-        token={token}
-        errors={formErrors(parsed.error)}
-      />,
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Reset password | Katbin</title>
+          <link rel="stylesheet" href={stylesheetUrl} />
+        </head>
+        <body class="flex h-full flex-col">
+          <ResetPasswordPage
+            csrf={await csrfToken(sessionToken)}
+            token={token}
+            errors={formErrors(parsed.error)}
+          />
+        </body>
+      </html>,
     );
   const consumed = await consumeAccountToken(c.env, token, "reset_password");
   if (!consumed) {
@@ -1587,7 +1627,19 @@ app.post("/users/log_in", async (c) => {
     return c.json({ error: "Forbidden" }, 403);
   const parsed = loginFormSchema.safeParse(form);
   if (!parsed.success)
-    return c.html(<LoginPage csrf={await csrfToken(token)} error="Invalid email or password" />);
+    return c.html(
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Log in | Katbin</title>
+          <link rel="stylesheet" href={stylesheetUrl} />
+        </head>
+        <body class="flex h-full flex-col">
+          <LoginPage csrf={await csrfToken(token)} error="Invalid email or password" />
+        </body>
+      </html>,
+    );
   const normalizedEmail = parsed.data["user[email]"].toLowerCase();
   const db = dbFor(c.env);
   const user = await db
@@ -1599,7 +1651,19 @@ app.post("/users/log_in", async (c) => {
     ? await verifyPassword(parsed.data["user[password]"], user.hashedPassword)
     : false;
   if (!user || !valid)
-    return c.html(<LoginPage csrf={await csrfToken(token)} error="Invalid email or password" />);
+    return c.html(
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Log in | Katbin</title>
+          <link rel="stylesheet" href={stylesheetUrl} />
+        </head>
+        <body class="flex h-full flex-col">
+          <LoginPage csrf={await csrfToken(token)} error="Invalid email or password" />
+        </body>
+      </html>,
+    );
   if (user.hashedPassword.startsWith("$2"))
     await db
       .update(users)
