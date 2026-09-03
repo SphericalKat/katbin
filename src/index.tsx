@@ -1097,7 +1097,12 @@ const PastePage: FC<{
             </button>
             <span role="status" aria-live="polite"></span>
             {showEdit ? (
-              <a href={`/edit/${id}`} aria-label="Edit paste" title="Edit paste">
+              <a
+                href={`/edit/${id}`}
+                class="flex h-11 w-11 items-center justify-center rounded-sm"
+                aria-label="Edit paste"
+                title="Edit paste"
+              >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 24 24"
@@ -1116,7 +1121,12 @@ const PastePage: FC<{
                 data-confirm="Are you sure you want to delete this paste?"
               >
                 <input type="hidden" name="_csrf" value={csrf} />
-                <button type="submit" aria-label="Delete paste" title="Delete paste">
+                <button
+                  type="submit"
+                  class="flex h-11 w-11 items-center justify-center rounded-sm"
+                  aria-label="Delete paste"
+                  title="Delete paste"
+                >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 24 24"
@@ -1160,11 +1170,14 @@ const PastesPage: FC<{ csrf: string; user: User; pastes: Array<{ id: string }> }
       <main class="flex h-full w-full flex-col overflow-hidden bg-light-grey">
         <ul class="h-full w-full overflow-y-auto px-6 py-4">
           {pastes.map((paste) => (
-            <li class="flex items-center gap-4">
-              <a href={`/v/${paste.id}`}>https://katb.in/v/{paste.id}</a>
+            <li class="flex items-center justify-between gap-4">
+              <a class="min-w-0 flex-1 truncate" href={`/v/${paste.id}`}>
+                https://katb.in/v/{paste.id}
+              </a>
               <form
                 action={`/${paste.id}`}
                 method="post"
+                class="shrink-0"
                 data-method="DELETE"
                 data-confirm="Are you sure you want to delete this paste?"
               >
