@@ -891,6 +891,8 @@ class TestDatabase {
       storage_key: string | null;
       content_length_bytes: number;
       content_sha256: string;
+      deleted_at: string | null;
+      updated_at?: string;
     }
   >();
   private readonly userRows = new Map<
@@ -981,6 +983,7 @@ class TestDatabase {
       storage_key: null,
       content_length_bytes: new TextEncoder().encode(paste.content).byteLength,
       content_sha256: "",
+      deleted_at: null,
     });
   }
 
@@ -1018,6 +1021,7 @@ class TestDatabase {
               storage_key: storageKey,
               content_length_bytes: contentLengthBytes,
               content_sha256: contentSha256,
+              deleted_at: null,
             });
           } else if (normalized.includes('insert into "users"')) {
             const [email, normalizedEmail, hashedPassword] = values as [string, string, string];
@@ -1090,26 +1094,34 @@ class TestDatabase {
               this.accountTokenRows.delete(values[0] as string);
             }
           } else if (normalized.startsWith('update "pastes"')) {
-            const [
-              content,
-              isUrl,
-              storageType,
-              storageKey,
-              contentLengthBytes,
-              contentSha256,
-              updatedAt,
-            ] = values as [string, boolean, string, string | null, number, string, string];
             const row = this.rows.get(values.at(-1) as string);
             if (row) {
-              Object.assign(row, {
-                content,
-                is_url: isUrl,
-                storage_type: storageType,
-                storage_key: storageKey,
-                content_length_bytes: contentLengthBytes,
-                content_sha256: contentSha256,
-                updated_at: updatedAt,
-              });
+              if (normalized.includes("deleted_at")) {
+                const [deletedAt, updatedAt] = values as [string, string, string];
+                Object.assign(row, {
+                  deleted_at: deletedAt,
+                  updated_at: updatedAt,
+                });
+              } else {
+                const [
+                  content,
+                  isUrl,
+                  storageType,
+                  storageKey,
+                  contentLengthBytes,
+                  contentSha256,
+                  updatedAt,
+                ] = values as [string, boolean, string, string | null, number, string, string];
+                Object.assign(row, {
+                  content,
+                  is_url: isUrl,
+                  storage_type: storageType,
+                  storage_key: storageKey,
+                  content_length_bytes: contentLengthBytes,
+                  content_sha256: contentSha256,
+                  updated_at: updatedAt,
+                });
+              }
             }
           }
           return { success: true };
@@ -1162,15 +1174,20 @@ class TestDatabase {
             return { results: matches ? [token] : [] };
           }
           if (normalized.includes('from "pastes"')) {
+            const hidesDeleted = normalized.includes('deleted_at');
             const id = values.find((value) => typeof value === "string");
             if (id) {
               const row = this.rows.get(id);
-              return { results: row ? [row] : [] };
+              if (!row) return { results: [] };
+              if (hidesDeleted && row.deleted_at != null) return { results: [] };
+              return { results: [row] };
             }
             const ownerId = values.find((value) => typeof value === "number");
             return {
               results: [...this.rows.values()].filter(
-                (row) => ownerId === undefined || row.owner_id === ownerId,
+                (row) =>
+                  (ownerId === undefined || row.owner_id === ownerId) &&
+                  (!hidesDeleted || row.deleted_at == null),
               ),
             };
           }
@@ -1242,9 +1259,12 @@ class TestDatabase {
               : [];
           }
           if (normalized.includes('from "pastes"')) {
+            const hidesDeleted = normalized.includes('deleted_at');
             const id = values.find((value) => typeof value === "string");
             if (id) {
               const row = this.rows.get(id);
+              if (!row) return [];
+              if (hidesDeleted && row.deleted_at != null) return [];
               return row
                 ? [
                     [
@@ -1255,13 +1275,18 @@ class TestDatabase {
                       row.owner_id,
                       row.storage_type,
                       row.storage_key,
+                      row.deleted_at,
                     ],
                   ]
                 : [];
             }
             const ownerId = values.find((value) => typeof value === "number");
             return [...this.rows.values()]
-              .filter((row) => ownerId === undefined || row.owner_id === ownerId)
+              .filter(
+                (row) =>
+                  (ownerId === undefined || row.owner_id === ownerId) &&
+                  (!hidesDeleted || row.deleted_at == null),
+              )
               .map((row) => [
                 row.id,
                 row.content,
@@ -1270,6 +1295,7 @@ class TestDatabase {
                 row.owner_id,
                 row.storage_type,
                 row.storage_key,
+                row.deleted_at,
               ]);
           }
           return [];

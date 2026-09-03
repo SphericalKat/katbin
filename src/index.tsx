@@ -3,7 +3,7 @@ import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { raw } from "hono/html";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
-import { and, eq, gt, like } from "drizzle-orm";
+import { and, eq, gt, isNull, like } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import bcrypt from "bcryptjs";
 import hljs from "highlight.js/lib/common";
@@ -1108,6 +1108,26 @@ const PastePage: FC<{
                 </svg>
               </a>
             ) : null}
+            {showEdit && csrf ? (
+              <form
+                action={`/${id}`}
+                method="post"
+                data-method="DELETE"
+                data-confirm="Are you sure you want to delete this paste?"
+              >
+                <input type="hidden" name="_csrf" value={csrf} />
+                <button type="submit" aria-label="Delete paste" title="Delete paste">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    class="h-6 w-6 cursor-pointer fill-current text-white"
+                    aria-hidden="true"
+                  >
+                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                  </svg>
+                </button>
+              </form>
+            ) : null}
           </div>
           <PasteContent
             content={content}
@@ -1140,8 +1160,23 @@ const PastesPage: FC<{ csrf: string; user: User; pastes: Array<{ id: string }> }
       <main class="flex h-full w-full flex-col overflow-hidden bg-light-grey">
         <ul class="h-full w-full overflow-y-auto px-6 py-4">
           {pastes.map((paste) => (
-            <li>
+            <li class="flex items-center gap-4">
               <a href={`/v/${paste.id}`}>https://katb.in/v/{paste.id}</a>
+              <form
+                action={`/${paste.id}`}
+                method="post"
+                data-method="DELETE"
+                data-confirm="Are you sure you want to delete this paste?"
+              >
+                <input type="hidden" name="_csrf" value={csrf} />
+                <button
+                  type="submit"
+                  aria-label={`Delete ${paste.id}`}
+                  title={`Delete ${paste.id}`}
+                >
+                  Delete
+                </button>
+              </form>
             </li>
           ))}
         </ul>
@@ -1929,14 +1964,15 @@ const findPaste = async (c: AppContext, value: string, includeContent = true) =>
         ownerId: pastes.ownerId,
         storageType: pastes.storageType,
         storageKey: pastes.storageKey,
+        deletedAt: pastes.deletedAt,
       })
       .from(pastes)
-      .where(eq(pastes.id, id))
+      .where(and(eq(pastes.id, id), isNull(pastes.deletedAt)))
       .get();
   const paste =
     (await findById(path.id)) ??
     (path.fullId !== path.id ? await findById(path.fullId) : undefined);
-  if (!paste) return null;
+  if (!paste || paste.deletedAt != null) return null;
   if (paste.storageType === "r2") {
     if (!paste.storageKey) return null;
     const object = await c.env.PASTES.get(paste.storageKey);
@@ -1956,7 +1992,7 @@ app.get("/pastes", async (c) => {
   const ownedPastes = await dbFor(c.env)
     .select({ id: pastes.id })
     .from(pastes)
-    .where(eq(pastes.ownerId, user.id))
+    .where(and(eq(pastes.ownerId, user.id), isNull(pastes.deletedAt)))
     .all();
   return c.html(<PastesPage csrf={await csrfToken(token)} user={user} pastes={ownedPastes} />);
 });
@@ -2030,6 +2066,28 @@ app.on(["PATCH", "PUT"], "/:id", async (c) => {
     }
   }
   return c.redirect(`${urlPaste ? "/v" : ""}/${result.paste.id}`, 303);
+});
+
+app.delete("/:id", async (c) => {
+  if (!sameOrigin(c.req.raw)) return c.json({ error: "Forbidden" }, 403);
+  const { token, session } = await sessionFromRequest(c);
+  if (!token || !session) return c.json({ error: "Forbidden" }, 403);
+  const contentLength = Number(c.req.header("Content-Length"));
+  if (contentLength > MAX_BODY_BYTES) return c.json({ error: "Payload too large" }, 413);
+  const form = await parseForm(c.req.raw);
+  if (!(await validCsrf(c, token, form))) return c.json({ error: "Forbidden" }, 403);
+  const value = c.req.param("id");
+  const result = await findPaste(c, value, false);
+  const user = await getCurrentUser(c.env, session);
+  if (!result) return c.text("Not found", 404);
+  if (!user || result.paste.ownerId !== user.id) return ownershipError(c, value);
+  const timestamp = new Date().toISOString();
+  await dbFor(c.env)
+    .update(pastes)
+    .set({ deletedAt: timestamp, updatedAt: timestamp })
+    .where(eq(pastes.id, result.paste.id));
+  setFlash(c, "info", "Paste deleted successfully.");
+  return c.redirect("/", 303);
 });
 
 app.get("/:id/raw", async (c) => {

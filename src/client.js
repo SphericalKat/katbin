@@ -27,6 +27,10 @@ document.querySelectorAll("form").forEach((form) => {
       event.preventDefault();
       return;
     }
+    if (form.dataset.confirm && !window.confirm(form.dataset.confirm)) {
+      event.preventDefault();
+      return;
+    }
     setFormLoading(form, true);
 
     if (!form.dataset.method) return;
