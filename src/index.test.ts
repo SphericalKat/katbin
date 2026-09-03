@@ -1174,7 +1174,7 @@ class TestDatabase {
             return { results: matches ? [token] : [] };
           }
           if (normalized.includes('from "pastes"')) {
-            const hidesDeleted = normalized.includes('deleted_at');
+            const hidesDeleted = normalized.includes("deleted_at");
             const id = values.find((value) => typeof value === "string");
             if (id) {
               const row = this.rows.get(id);
@@ -1259,7 +1259,7 @@ class TestDatabase {
               : [];
           }
           if (normalized.includes('from "pastes"')) {
-            const hidesDeleted = normalized.includes('deleted_at');
+            const hidesDeleted = normalized.includes("deleted_at");
             const id = values.find((value) => typeof value === "string");
             if (id) {
               const row = this.rows.get(id);
