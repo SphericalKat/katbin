@@ -18,7 +18,7 @@
     "bcryptjs": "3.0.2",
     "drizzle-orm": "^0.45.2",
     "highlight.js": "^11.12.0",
-    "hono": "4.13.5",
+    "hono": "4.13.7",
     "marked": "^18.0.11",
     "sanitize-html": "^2.17.7",
     "zod": "^4.5.4"
