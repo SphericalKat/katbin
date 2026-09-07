@@ -18,6 +18,51 @@ import clientUrl from "./client.js?url";
 import alpineUrl from "@alpinejs/csp/dist/cdn.min.js?url";
 import { R2_THRESHOLD_BYTES } from "./constants";
 import { accountTokens, pastes, sessions, users } from "./db/schema";
+import {
+  adminNoCache,
+  getClientIp,
+  isAdminUser,
+  isCanonicalHost,
+  verifyAccessJwt,
+} from "./admin/auth";
+import { matchesBan, parseBanTarget } from "./admin/ip";
+import {
+  addDmcaPaste,
+  createAccountBan,
+  createDmcaCase,
+  createIpBan,
+  decideDmcaCase,
+  enqueueDeletion,
+  isAccountBanned,
+  isPasteTombstoned,
+  liftAccountBan,
+  liftIpBan,
+  listActiveIpBans,
+  listAdminActions,
+  listDeletions,
+  logAbuseEvent,
+  logAdminAction,
+  searchAbuse,
+  updateDeletionStatus,
+} from "./admin/store";
+import {
+  getRange,
+  recordEvent,
+  recordVisit,
+  summarizeTotals,
+  utcDay,
+  shouldCountUsage,
+} from "./admin/metrics";
+import {
+  DeletionsPage,
+  DmcaPage,
+  AdminLayout,
+  ActionsPage,
+  BansPage,
+  OverviewPage,
+  SearchPage,
+} from "./admin/pages";
+import { processDeletionQueue } from "./admin/deletion";
 import stylesheetUrl from "./styles.css?url";
 
 const securityHeaders = {
@@ -127,8 +172,18 @@ type Bindings = {
   LOGIN_LIMITER?: RateLimit;
   REGISTRATION_LIMITER?: RateLimit;
   ACCOUNT_EMAIL_LIMITER?: RateLimit;
+  ADMIN_USER_IDS?: string;
+  /** Production settings: CANONICAL_HOST, ACCESS_ISSUER, ACCESS_AUDIENCE, ADMIN_USER_IDS, and VISITOR_HASH_PEPPER. */
+  VISITOR_HASH_PEPPER?: string;
+  CANONICAL_HOST?: string;
+  ACCESS_ISSUER?: string;
+  ACCESS_AUDIENCE?: string;
 };
-type AppContext = Context<{ Bindings: Bindings }>;
+type AppEnv = {
+  Bindings: Bindings;
+  Variables: { adminUser: User; adminToken: string };
+};
+type AppContext = Context<AppEnv>;
 type User = typeof users.$inferSelect;
 type Session = typeof sessions.$inferSelect;
 type FormErrors = Record<string, string[]>;
@@ -212,11 +267,89 @@ const pastePath = (value: string) => {
 const dbFor = (env: Bindings) => drizzle(env.DB);
 const now = () => Math.floor(Date.now() / 1000);
 
+const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+const isMissingModerationTableError = (error: unknown) => {
+  const message = errorMessage(error).toLowerCase();
+  return (
+    message.includes("no such table") ||
+    message.includes("does not exist") ||
+    message.includes("not a function")
+  );
+};
+
+const recordMetricSafely = async (env: Bindings, kind: Parameters<typeof recordEvent>[1]) => {
+  try {
+    await recordEvent(env.DB, kind);
+  } catch (error) {
+    if (isMissingModerationTableError(error)) return;
+    console.error(
+      JSON.stringify({ error: errorMessage(error), message: "metric recording failed" }),
+    );
+  }
+};
+
+const recordVisitSafely = async (env: Bindings, ip: string) => {
+  try {
+    await recordVisit(env.DB, ip);
+  } catch (error) {
+    if (isMissingModerationTableError(error)) return;
+    console.error(
+      JSON.stringify({ error: errorMessage(error), message: "visitor recording failed" }),
+    );
+  }
+};
+
+const logAbuseSafely = async (env: Bindings, input: Parameters<typeof logAbuseEvent>[1]) => {
+  try {
+    await logAbuseEvent(env.DB, input);
+  } catch (error) {
+    if (isMissingModerationTableError(error)) return;
+    console.error(JSON.stringify({ error: errorMessage(error), message: "abuse logging failed" }));
+  }
+};
+
+const ipIsBanned = async (env: Bindings, clientIp: string) => {
+  try {
+    const bans = await listActiveIpBans(env.DB);
+    return bans.some((ban) => {
+      const parsed = parseBanTarget(String(ban.target ?? ""));
+      return !("error" in parsed) && matchesBan(clientIp, parsed.normalized);
+    });
+  } catch (error) {
+    if (isMissingModerationTableError(error)) return false;
+    console.error(JSON.stringify({ error: errorMessage(error), message: "IP ban lookup failed" }));
+    return true;
+  }
+};
+
+const accountIsBanned = async (env: Bindings, userId: number) => {
+  try {
+    return await isAccountBanned(env.DB, userId);
+  } catch (error) {
+    if (isMissingModerationTableError(error)) return false;
+    console.error(
+      JSON.stringify({ error: errorMessage(error), message: "account ban lookup failed" }),
+    );
+    return true;
+  }
+};
+
+const pasteIsTombstoned = async (env: Bindings, pasteId: string) => {
+  try {
+    return await isPasteTombstoned(env.DB, pasteId);
+  } catch (error) {
+    if (isMissingModerationTableError(error)) return false;
+    throw error;
+  }
+};
+
 const requestAllowed = async (c: AppContext, limiter: RateLimit | undefined) => {
   if (!limiter) return true;
   const { success } = await limiter.limit({
-    key: c.req.header("CF-Connecting-IP") ?? "unknown",
+    key: getClientIp(c.req.raw.headers),
   });
+  if (!success) await recordMetricSafely(c.env, "rate_limit_reject");
   return success;
 };
 
@@ -1117,6 +1250,7 @@ const PastePage: FC<{
               <form
                 action={`/${id}`}
                 method="post"
+                class="m-0"
                 data-method="DELETE"
                 data-confirm="Are you sure you want to delete this paste?"
               >
@@ -1130,9 +1264,10 @@ const PastePage: FC<{
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 256 256"
-                    class="h-6 w-6 cursor-pointer fill-current text-white hover:text-amber"
+                    class="h-6 w-6 translate-y-px cursor-pointer fill-current text-white hover:text-amber"
                     aria-hidden="true"
                   >
+                    {/* Trash glyph runs high next to copy and pencil */}
                     <path d="M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1,16,0V104a8,8,0,0,1,16,0Z" />
                   </svg>
                 </button>
@@ -1168,25 +1303,27 @@ const PastesPage: FC<{ csrf: string; user: User; pastes: Array<{ id: string }> }
     <body class="flex h-full flex-col">
       <Header csrf={csrf} user={user} />
       <main class="flex h-full w-full flex-col overflow-hidden bg-light-grey">
-        <ul class="h-full w-fit overflow-y-auto px-6 py-4">
+        <ul class="grid max-w-full grid-cols-[minmax(0,max-content)_auto] items-center justify-start gap-x-4 overflow-x-hidden overflow-y-auto px-6 py-4">
           {pastes.map((paste) => (
-            <li class="flex items-center justify-between gap-4">
-              <a class="min-w-0 truncate" href={`/v/${paste.id}`}>
+            <li class="contents">
+              <a class="truncate" href={`/v/${paste.id}`}>
                 https://katb.in/v/{paste.id}
               </a>
               <form
                 action={`/${paste.id}`}
                 method="post"
-                class="shrink-0"
+                class="m-0 shrink-0"
                 data-method="DELETE"
                 data-confirm="Are you sure you want to delete this paste?"
               >
                 <input type="hidden" name="_csrf" value={csrf} />
                 <button
                   type="submit"
+                  class="translate-y-px"
                   aria-label={`Delete ${paste.id}`}
                   title={`Delete ${paste.id}`}
                 >
+                  {/* Nudged down: links carry descenders, Delete does not */}
                   Delete
                 </button>
               </form>
@@ -1284,13 +1421,638 @@ const createStoredPaste = async (
   return { id, urlPaste };
 };
 
-export const app = new Hono<{ Bindings: Bindings }>();
+const isApiRequest = (c: AppContext) =>
+  new URL(c.req.url).pathname.startsWith("/api/") ||
+  c.req.header("Accept")?.toLowerCase().includes("application/json");
+
+const blockedResponse = (c: AppContext) => {
+  const headers = { "Cache-Control": "no-store" };
+  return isApiRequest(c)
+    ? c.json({ error: "Forbidden" }, 403, headers)
+    : c.html(
+        <html lang="en">
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Access blocked | Katbin</title>
+          </head>
+          <body>
+            <h1>Access blocked</h1>
+            <p>This request cannot be completed.</p>
+          </body>
+        </html>,
+        403,
+        headers,
+      );
+};
+
+const rejectBannedUser = async (c: AppContext, user: User | null) => {
+  if (!user || !(await accountIsBanned(c.env, user.id))) return null;
+  await revokeUserAccess(c.env, user.id);
+  return blockedResponse(c);
+};
+
+export const app = new Hono<AppEnv>();
 
 app.use("*", async (c, next) => {
   await next();
   const headers = new Headers(c.res.headers);
   for (const [name, value] of Object.entries(securityHeaders)) headers.set(name, value);
   c.res = new Response(c.res.body, { headers, status: c.res.status, statusText: c.res.statusText });
+});
+
+app.use("*", async (c, next) => {
+  const clientIp = getClientIp(c.req.raw.headers);
+  if (await ipIsBanned(c.env, clientIp)) {
+    await recordMetricSafely(c.env, "ip_ban_reject");
+    return blockedResponse(c);
+  }
+
+  const token = getCookie(c, SESSION_COOKIE);
+  const session = token ? await sessionFromToken(c.env, token) : null;
+  const user = await getCurrentUser(c.env, session ?? null);
+  if (user && (await accountIsBanned(c.env, user.id))) {
+    await revokeUserAccess(c.env, user.id);
+    return blockedResponse(c);
+  }
+
+  await next();
+});
+
+app.use("*", async (c, next) => {
+  await next();
+  if (c.res.status >= 400 || !shouldCountUsage(new URL(c.req.url).pathname)) return;
+
+  const clientIp = getClientIp(c.req.raw.headers);
+  await recordVisitSafely(c.env, clientIp);
+
+  if (c.req.method !== "GET") return;
+  const path = new URL(c.req.url).pathname;
+  const pastePathRequest =
+    /^\/v\/[^/]+$/.test(path) ||
+    /^\/[^/]+\/raw$/.test(path) ||
+    (/^\/[^/]+$/.test(path) && !reservedIds.has(path.slice(1).toLowerCase()));
+  if (!pastePathRequest) return;
+
+  // Read and redirect counts include bots because this is request activity, not a human estimate.
+  await recordMetricSafely(c.env, c.res.status >= 300 && c.res.status < 400 ? "redirect" : "read");
+});
+
+const adminDenied = (c: AppContext, status: 400 | 401 | 403 | 404 = 403) =>
+  c.json({ error: status === 404 ? "Not found" : "Forbidden" }, status, adminNoCache());
+
+/**
+ * Recovery: if an operator is blocked by an IP ban, use the configured D1 binding with
+ * `wrangler d1 execute` to set `lifted_at` on the matching `ip_bans` row, then retry.
+ * Keep this procedure outside the application request path so it cannot bypass the gate.
+ */
+const requireAdmin = async (c: AppContext, next: () => Promise<void>) => {
+  try {
+    const requestHost = c.req.header("Host") ?? new URL(c.req.url).host;
+    if (!isCanonicalHost(requestHost, c.env)) return adminDenied(c, 404);
+
+    const accessToken =
+      c.req.header("Cf-Access-Jwt-Assertion") ?? getCookie(c, "cf-access-jwt-assertion");
+    if (!accessToken || !c.env.ACCESS_ISSUER || !c.env.ACCESS_AUDIENCE) return adminDenied(c, 401);
+    const access = await verifyAccessJwt(accessToken, {
+      issuer: c.env.ACCESS_ISSUER,
+      audience: c.env.ACCESS_AUDIENCE,
+      jwksFetch: (url) => globalThis.fetch(url),
+    });
+    if (!access.valid) return adminDenied(c, 401);
+
+    const { token, session } = await sessionFromRequest(c);
+    const user = await getCurrentUser(c.env, session);
+    if (!token || !session?.userId || !user || !isAdminUser(user.id, c.env)) return adminDenied(c);
+    if (await accountIsBanned(c.env, user.id)) return adminDenied(c);
+    c.set("adminUser", user);
+    c.set("adminToken", token);
+    c.header("Cache-Control", "no-store");
+    await next();
+  } catch {
+    return adminDenied(c);
+  }
+};
+
+// Register both patterns because `/admin` and `/admin/...` are separate Hono matches.
+app.use("/admin", requireAdmin);
+app.use("/admin/*", requireAdmin);
+
+const renderAdmin = async (c: AppContext, active: string, body: any) =>
+  c.html(
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Katbin admin</title>
+        <link rel="stylesheet" href={stylesheetUrl} />
+      </head>
+      <body class="flex min-h-full flex-col">
+        <AdminLayout
+          csrf={await csrfToken(c.get("adminToken"))}
+          userEmail={c.get("adminUser").email}
+          active={active}
+        >
+          {active === "Bans" ? (
+            <p class="alert alert-info" role="note">
+              Operator recovery: if an IP ban blocks you, lift it with a wrangler D1 SQL update to
+              set lifted_at, then retry the request.
+            </p>
+          ) : null}
+          {body}
+        </AdminLayout>
+      </body>
+    </html>,
+    200,
+    adminNoCache(),
+  );
+
+const adminForm = async (c: AppContext) => {
+  if (!sameOrigin(c.req.raw)) return null;
+  const token = c.get("adminToken");
+  const form = await parseForm(c.req.raw);
+  return (await validCsrf(c, token, form)) ? form : null;
+};
+
+const adminPageNumber = (value: string | undefined) => {
+  const parsed = Number(value ?? "1");
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+};
+
+const adminRows = async (c: AppContext, query: string, ...values: any[]) =>
+  (
+    await c.env.DB.prepare(query)
+      .bind(...values)
+      .all()
+  ).results;
+
+const adminCount = async (c: AppContext, query: string, ...values: any[]) => {
+  const row = await c.env.DB.prepare(query)
+    .bind(...values)
+    .first();
+  return Number(row?.count ?? row?.["COUNT(*)"] ?? 0);
+};
+
+const listAccountBans = (c: AppContext) =>
+  adminRows(c, "SELECT * FROM account_bans ORDER BY id DESC");
+
+const listDmcaCases = async (c: AppContext) => {
+  const cases = await adminRows(c, "SELECT * FROM dmca_cases ORDER BY id DESC");
+  return Promise.all(
+    cases.map(async (item) => ({
+      ...item,
+      paste_ids: (
+        await adminRows(
+          c,
+          "SELECT paste_id FROM dmca_case_pastes WHERE case_id = ? ORDER BY paste_id",
+          item.id,
+        )
+      )
+        .map((paste) => paste.paste_id)
+        .join(", "),
+    })),
+  );
+};
+
+const deletionBucket = (c: AppContext) =>
+  c.env.PASTES ?? ({ delete: async (_key: string) => undefined } as unknown as R2Bucket);
+
+const enqueueAndAttemptDeletion = async (c: AppContext, pasteId: string, reason: string) => {
+  const queueId = await enqueueDeletion(c.env.DB, {
+    pasteId,
+    reason,
+    createdAt: new Date().toISOString(),
+  });
+  try {
+    await processDeletionQueue(c.env.DB, deletionBucket(c), 20);
+  } catch (error) {
+    await updateDeletionStatus(c.env.DB, queueId, "pending", errorMessage(error)).catch(
+      () => undefined,
+    );
+  }
+
+  const row: any = await c.env.DB.prepare(
+    "SELECT status, last_error FROM deletion_queue WHERE id = ?",
+  )
+    .bind(queueId)
+    .first()
+    .catch(() => null);
+  if (row?.status === "failed") {
+    await updateDeletionStatus(
+      c.env.DB,
+      queueId,
+      "pending",
+      row.last_error ?? "Deletion failed",
+    ).catch(() => undefined);
+    return "pending" as const;
+  }
+  return String(row?.status ?? "pending") as "pending" | "in_progress" | "completed" | "failed";
+};
+
+const pasteIdFromSearch = (value: string) => {
+  const candidate = value.trim();
+  if (!candidate) return "";
+  try {
+    const url = new URL(candidate.startsWith("/") ? `https://katb.in${candidate}` : candidate);
+    const parts = url.pathname.split("/").filter(Boolean);
+    return parts.at(-1) ?? "";
+  } catch {
+    return candidate.replace(/^\/+/, "").split("/").filter(Boolean).at(-1) ?? candidate;
+  }
+};
+
+const searchAdminRecords = async (c: AppContext, q: string, type: string) => {
+  const value = q.trim();
+  const pasteId = pasteIdFromSearch(value);
+  const accounts =
+    (type === "account" && /^\d+$/.test(value)) || type === "email" || (!type && value)
+      ? await adminRows(
+          c,
+          type === "account" || (!type && /^\d+$/.test(value))
+            ? "SELECT id, email, inserted_at AS created_at FROM users WHERE id = ?"
+            : "SELECT id, email, inserted_at AS created_at FROM users WHERE email = ? OR normalized_email = ?",
+          ...(type === "account" || (!type && /^\d+$/.test(value))
+            ? [Number(value)]
+            : [value, value.toLowerCase()]),
+        )
+      : [];
+  const pastes =
+    type === "paste" || (!type && value)
+      ? await adminRows(
+          c,
+          "SELECT pastes.id, pastes.created_at, pastes.deleted_at, users.email AS owner_email FROM pastes LEFT JOIN users ON users.id = pastes.owner_id WHERE pastes.id = ?",
+          type === "paste" ? pasteId : pasteId,
+        )
+      : [];
+  return { accounts, pastes, pasteId };
+};
+
+const overviewPage = async (c: AppContext) => {
+  const rawRange = Number(new URL(c.req.url).searchParams.get("range") ?? "30");
+  const range = ([7, 30, 90] as const).includes(rawRange as 7 | 30 | 90)
+    ? (rawRange as 7 | 30 | 90)
+    : 30;
+  const notes: string[] = [];
+  let totals = { accounts: 0, activePastes: 0 };
+  let metricRange: Awaited<ReturnType<typeof getRange>> = {
+    days: [],
+    rows: {},
+    lastUpdated: null,
+  };
+  try {
+    totals = await summarizeTotals(c.env.DB);
+    metricRange = await getRange(c.env.DB, range, utcDay());
+  } catch {
+    notes.push("Metrics unavailable.");
+  }
+  const storage: { d1Bytes?: number; r2Objects?: number; r2Bytes?: number; stale?: boolean } = {};
+  try {
+    const row = await c.env.DB.prepare(
+      "SELECT page_count * page_size AS bytes FROM pragma_page_count(), pragma_page_size()",
+    )
+      .bind()
+      .first();
+    if (row?.bytes !== undefined) storage.d1Bytes = Number(row.bytes);
+  } catch {
+    notes.push("D1 storage usage unavailable.");
+    storage.stale = true;
+  }
+  try {
+    const list = (c.env.PASTES as any)?.list;
+    if (typeof list !== "function") throw new Error("R2 list unavailable");
+    let cursor: string | undefined;
+    let objects = 0;
+    let bytes = 0;
+    do {
+      const page = await list.call(c.env.PASTES, { limit: 1000, ...(cursor ? { cursor } : {}) });
+      objects += page.objects?.length ?? 0;
+      bytes += (page.objects ?? []).reduce(
+        (sum: number, object: any) => sum + Number(object.size ?? 0),
+        0,
+      );
+      cursor = page.truncated ? page.cursor : undefined;
+    } while (cursor);
+    storage.r2Objects = objects;
+    storage.r2Bytes = bytes;
+  } catch {
+    notes.push("R2 storage usage unavailable.");
+    storage.stale = true;
+  }
+  const failures = await adminCount(
+    c,
+    "SELECT COUNT(*) AS count FROM deletion_queue WHERE status = 'failed'",
+  ).catch(() => 0);
+  notes.push(`Deletion failures: ${failures}.`);
+  const series = metricRange.days.map((day) => ({ day, ...metricRange.rows[day] })) as any;
+  return renderAdmin(
+    c,
+    "Overview",
+    <OverviewPage
+      totals={totals}
+      range={range}
+      series={series}
+      lastUpdated={metricRange.lastUpdated}
+      storage={storage}
+      notes={notes}
+    />,
+  );
+};
+
+app.get("/admin", (c) => overviewPage(c));
+app.get("/admin/overview", (c) => overviewPage(c));
+
+app.get("/admin/search", async (c) => {
+  const url = new URL(c.req.url);
+  const q = url.searchParams.get("q") ?? "";
+  const type = url.searchParams.get("type") ?? "";
+  const page = adminPageNumber(url.searchParams.get("page") ?? undefined);
+  const value = q.trim();
+  const effectiveType =
+    type || (/^\d+$/.test(value) ? "account" : value.includes("@") ? "email" : "paste");
+  const search = {
+    ...(effectiveType === "account" && /^\d+$/.test(value) ? { accountId: Number(value) } : {}),
+    ...(effectiveType === "email" && value.includes("@") ? { email: value } : {}),
+    ...(effectiveType === "paste" ? { pasteId: pasteIdFromSearch(value) } : {}),
+    ...(effectiveType === "ip" ? { ip: value } : {}),
+    limit: 50,
+    offset: (page - 1) * 50,
+  };
+  const abuse = await searchAbuse(c.env.DB, search);
+  const direct = await searchAdminRecords(c, value, effectiveType);
+  return renderAdmin(
+    c,
+    "Search",
+    <SearchPage
+      q={q}
+      type={type}
+      csrf={await csrfToken(c.get("adminToken"))}
+      results={{ abuse, accounts: direct.accounts, pastes: direct.pastes }}
+      page={page}
+    />,
+  );
+});
+
+app.post("/admin/search", async (c) => {
+  const form = await adminForm(c);
+  if (!form) return adminDenied(c);
+  const query = new URLSearchParams({ q: String(form.q ?? ""), type: String(form.type ?? "") });
+  return c.redirect(`/admin/search?${query.toString()}`, 303);
+});
+
+app.get("/admin/bans", async (c) =>
+  renderAdmin(
+    c,
+    "Bans",
+    <BansPage
+      accountBans={await listAccountBans(c)}
+      ipBans={await listActiveIpBans(c.env.DB)}
+      csrf={await csrfToken(c.get("adminToken"))}
+    />,
+  ),
+);
+
+app.post("/admin/bans/account", async (c) => {
+  const form = await adminForm(c);
+  if (!form) return adminDenied(c);
+  const userId = Number(form.user_id ?? form.userId);
+  const reason = String(form.reason ?? "").trim();
+  if (!Number.isSafeInteger(userId) || !reason) return adminDenied(c, 400);
+  const target = await adminRows(c, "SELECT id FROM users WHERE id = ?", userId);
+  if (!target.length) return c.json({ error: "Account not found" }, 404, adminNoCache());
+  const admin = String(c.get("adminUser").id);
+  const banId = await createAccountBan(c.env.DB, { userId, reason, createdBy: admin });
+  await revokeUserAccess(c.env, userId);
+  const owned = await adminRows(c, "SELECT id FROM pastes WHERE owner_id = ?", userId);
+  for (const paste of owned) {
+    const pasteId = String(paste.id);
+    await enqueueAndAttemptDeletion(c, pasteId, reason);
+  }
+  await logAdminAction(c.env.DB, {
+    admin,
+    action: "account_ban",
+    target: String(userId),
+    reason,
+    outcome: String(banId),
+  });
+  return renderAdmin(
+    c,
+    "Bans",
+    <BansPage
+      accountBans={await listAccountBans(c)}
+      ipBans={await listActiveIpBans(c.env.DB)}
+      csrf={await csrfToken(c.get("adminToken"))}
+    />,
+  );
+});
+
+const liftAccount = async (c: AppContext, idValue?: string) => {
+  const form = await adminForm(c);
+  if (!form) return adminDenied(c);
+  const id = Number(idValue ?? form.ban_id ?? form.id);
+  if (!Number.isSafeInteger(id)) return adminDenied(c);
+  await liftAccountBan(c.env.DB, id);
+  await logAdminAction(c.env.DB, {
+    admin: String(c.get("adminUser").id),
+    action: "account_ban_lift",
+    target: String(id),
+    reason: "",
+    outcome: "lifted",
+  });
+  return renderAdmin(
+    c,
+    "Bans",
+    <BansPage
+      accountBans={await listAccountBans(c)}
+      ipBans={await listActiveIpBans(c.env.DB)}
+      csrf={await csrfToken(c.get("adminToken"))}
+    />,
+  );
+};
+app.post("/admin/bans/account/lift", (c) => liftAccount(c));
+app.post("/admin/bans/account/:id/lift", (c) => liftAccount(c, c.req.param("id")));
+
+app.post("/admin/bans/ip", async (c) => {
+  const form = await adminForm(c);
+  if (!form) return adminDenied(c);
+  const target = String(form.target ?? "").trim();
+  const reason = String(form.reason ?? "").trim();
+  const parsed = parseBanTarget(target);
+  if ("error" in parsed || !reason) {
+    return renderAdmin(
+      c,
+      "Bans",
+      <BansPage
+        accountBans={await listAccountBans(c)}
+        ipBans={await listActiveIpBans(c.env.DB)}
+        csrf={await csrfToken(c.get("adminToken"))}
+        preview={"error" in parsed ? parsed.error : "A reason is required"}
+      />,
+    );
+  }
+  const admin = String(c.get("adminUser").id);
+  const id = await createIpBan(c.env.DB, { target: parsed.normalized, reason, createdBy: admin });
+  await logAdminAction(c.env.DB, {
+    admin,
+    action: "ip_ban",
+    target: parsed.normalized,
+    reason,
+    outcome: String(id),
+  });
+  return renderAdmin(
+    c,
+    "Bans",
+    <BansPage
+      accountBans={await listAccountBans(c)}
+      ipBans={await listActiveIpBans(c.env.DB)}
+      csrf={await csrfToken(c.get("adminToken"))}
+    />,
+  );
+});
+
+const liftIp = async (c: AppContext, idValue?: string) => {
+  const form = await adminForm(c);
+  if (!form) return adminDenied(c);
+  const id = Number(idValue ?? form.ban_id ?? form.id);
+  if (!Number.isSafeInteger(id)) return adminDenied(c);
+  await liftIpBan(c.env.DB, id);
+  await logAdminAction(c.env.DB, {
+    admin: String(c.get("adminUser").id),
+    action: "ip_ban_lift",
+    target: String(id),
+    reason: "",
+    outcome: "lifted",
+  });
+  return renderAdmin(
+    c,
+    "Bans",
+    <BansPage
+      accountBans={await listAccountBans(c)}
+      ipBans={await listActiveIpBans(c.env.DB)}
+      csrf={await csrfToken(c.get("adminToken"))}
+    />,
+  );
+};
+app.post("/admin/bans/ip/lift", (c) => liftIp(c));
+app.post("/admin/bans/ip/:id/lift", (c) => liftIp(c, c.req.param("id")));
+
+const renderDeletions = async (c: AppContext) =>
+  renderAdmin(
+    c,
+    "Deletions",
+    <DeletionsPage
+      queue={await listDeletions(c.env.DB)}
+      csrf={await csrfToken(c.get("adminToken"))}
+    />,
+  );
+
+app.get("/admin/deletions", (c) => renderDeletions(c));
+const deletePaste = async (c: AppContext, idValue?: string) => {
+  const form = await adminForm(c);
+  if (!form) return adminDenied(c);
+  const pasteId = String(idValue ?? form.paste_id ?? form.pasteId ?? "").trim();
+  const reason = String(form.reason ?? "").trim();
+  if (!pasteId || !reason) return adminDenied(c);
+  const outcome = await enqueueAndAttemptDeletion(c, pasteId, reason);
+  await logAdminAction(c.env.DB, {
+    admin: String(c.get("adminUser").id),
+    action: "paste_delete",
+    target: pasteId,
+    reason,
+    outcome,
+  });
+  return renderDeletions(c);
+};
+app.post("/admin/deletions", (c) => deletePaste(c));
+app.post("/admin/pastes/:id/delete", (c) => deletePaste(c, c.req.param("id")));
+app.post("/admin/deletions/retry", async (c) => {
+  const form = await adminForm(c);
+  if (!form) return adminDenied(c);
+  try {
+    await processDeletionQueue(c.env.DB, deletionBucket(c), 20);
+  } catch (error) {
+    console.error(JSON.stringify({ error: errorMessage(error), message: "deletion retry failed" }));
+  }
+  return c.redirect("/admin/deletions", 303);
+});
+
+app.get("/admin/dmca", async (c) =>
+  renderAdmin(
+    c,
+    "DMCA",
+    <DmcaPage cases={await listDmcaCases(c)} csrf={await csrfToken(c.get("adminToken"))} />,
+  ),
+);
+app.post("/admin/dmca", async (c) => {
+  const form = await adminForm(c);
+  if (!form) return adminDenied(c);
+  const reference = String(form.reference ?? "").trim();
+  const complainant = String(form.complainant ?? "").trim();
+  const receivedAt = String(form.received_date ?? form.receivedAt ?? form.received_at ?? "").trim();
+  const pasteIds = String(form.pasteIds ?? form.paste_ids ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  if (!reference || !complainant || !receivedAt || !pasteIds.length) return adminDenied(c);
+  const id = await createDmcaCase(c.env.DB, {
+    reference,
+    complainant,
+    receivedAt,
+    notes: String(form.notes ?? ""),
+  });
+  for (const pasteId of pasteIds) await addDmcaPaste(c.env.DB, id, pasteId);
+  await logAdminAction(c.env.DB, {
+    admin: String(c.get("adminUser").id),
+    action: "dmca_create",
+    target: String(id),
+    reason: String(form.notes ?? ""),
+    outcome: "open",
+  });
+  return renderAdmin(
+    c,
+    "DMCA",
+    <DmcaPage cases={await listDmcaCases(c)} csrf={await csrfToken(c.get("adminToken"))} />,
+  );
+});
+
+const decideDmca = async (c: AppContext, idValue?: string) => {
+  const form = await adminForm(c);
+  if (!form) return adminDenied(c);
+  const caseId = Number(idValue ?? form.case_id ?? form.caseId);
+  const decisionValue = String(form.decision ?? "").toLowerCase();
+  const status =
+    decisionValue === "uphold" || decisionValue === "upheld"
+      ? "upheld"
+      : decisionValue === "reject" || decisionValue === "rejected"
+        ? "rejected"
+        : "open";
+  const reason = String(form.reason ?? "").trim();
+  if (!Number.isSafeInteger(caseId) || status === "open" || !reason) return adminDenied(c);
+  const admin = String(c.get("adminUser").id);
+  await decideDmcaCase(c.env.DB, caseId, status, reason, admin);
+  if (status === "upheld") {
+    const pastesForCase = await adminRows(
+      c,
+      "SELECT paste_id FROM dmca_case_pastes WHERE case_id = ?",
+      caseId,
+    );
+    for (const row of pastesForCase) {
+      const pasteId = String(row.paste_id);
+      await enqueueAndAttemptDeletion(c, pasteId, `DMCA case ${caseId}: ${reason}`);
+    }
+  }
+  return renderAdmin(
+    c,
+    "DMCA",
+    <DmcaPage cases={await listDmcaCases(c)} csrf={await csrfToken(c.get("adminToken"))} />,
+  );
+};
+app.post("/admin/dmca/decision", (c) => decideDmca(c));
+app.post("/admin/dmca/:id/decision", (c) => decideDmca(c, c.req.param("id")));
+
+app.get("/admin/actions", async (c) => {
+  const page = adminPageNumber(new URL(c.req.url).searchParams.get("page") ?? undefined);
+  const actions = await listAdminActions(c.env.DB, 50, (page - 1) * 50);
+  return renderAdmin(c, "Actions", <ActionsPage actions={actions} page={page} />);
 });
 
 app.get("/", async (c) => {
@@ -1440,6 +2202,13 @@ app.post("/users/register", async (c) => {
     .where(eq(users.normalizedEmail, normalizedEmail))
     .get();
   if (!user) throw new Error("registered user was not returned");
+  await logAbuseSafely(c.env, {
+    ip: getClientIp(c.req.raw.headers),
+    eventType: "account_created",
+    accountId: user.id,
+    email: user.email,
+  });
+  await recordMetricSafely(c.env, "account_created");
   await deliverAccountEmail(
     c.env,
     user.id,
@@ -1505,6 +2274,11 @@ app.post("/users/confirm", async (c) => {
 });
 
 app.get("/users/confirm/:token", async (c) => {
+  const pending = await findAccountToken(c.env, c.req.param("token"), "confirm");
+  if (pending && (await accountIsBanned(c.env, pending.userId))) {
+    await revokeUserAccess(c.env, pending.userId);
+    return blockedResponse(c);
+  }
   const consumed = await consumeAccountToken(c.env, c.req.param("token"), "confirm");
   if (consumed) {
     await dbFor(c.env)
@@ -1572,7 +2346,12 @@ app.post("/users/reset_password", async (c) => {
 
 app.get("/users/reset_password/:token", async (c) => {
   const token = c.req.param("token");
-  if (!(await findAccountToken(c.env, token, "reset_password"))) {
+  const pending = await findAccountToken(c.env, token, "reset_password");
+  if (pending && (await accountIsBanned(c.env, pending.userId))) {
+    await revokeUserAccess(c.env, pending.userId);
+    return blockedResponse(c);
+  }
+  if (!pending) {
     setFlash(c, "error", INVALID_RESET_MESSAGE);
     return c.redirect("/", 302);
   }
@@ -1620,6 +2399,11 @@ app.put("/users/reset_password/:token", async (c) => {
         </body>
       </html>,
     );
+  const pending = await findAccountToken(c.env, token, "reset_password");
+  if (pending && (await accountIsBanned(c.env, pending.userId))) {
+    await revokeUserAccess(c.env, pending.userId);
+    return blockedResponse(c);
+  }
   const consumed = await consumeAccountToken(c.env, token, "reset_password");
   if (!consumed) {
     setFlash(c, "error", INVALID_RESET_MESSAGE);
@@ -1712,6 +2496,10 @@ app.post("/users/log_in", async (c) => {
         </body>
       </html>,
     );
+  if (await accountIsBanned(c.env, user.id)) {
+    await revokeUserAccess(c.env, user.id);
+    return blockedResponse(c);
+  }
   if (user.hashedPassword.startsWith("$2"))
     await db
       .update(users)
@@ -1720,6 +2508,12 @@ app.post("/users/log_in", async (c) => {
   const created = await createSession(c.env, user.id);
   await db.delete(sessions).where(eq(sessions.tokenHash, await hashToken(token)));
   setSessionCookie(c, created.token, parsed.data["user[remember_me]"] === "true");
+  await logAbuseSafely(c.env, {
+    ip: getClientIp(c.req.raw.headers),
+    eventType: "signed_in",
+    accountId: user.id,
+    email: user.email,
+  });
   return c.redirect("/", 303);
 });
 
@@ -1743,6 +2537,8 @@ app.get("/users/settings", async (c) => {
   const { token, session } = await sessionFromRequest(c);
   const user = await getCurrentUser(c.env, session);
   if (!token || !session?.userId || !user) return c.redirect("/users/log_in", 302);
+  const bannedResponse = await rejectBannedUser(c, user);
+  if (bannedResponse) return bannedResponse;
   return c.html(
     <html lang="en">
       <head>
@@ -1766,6 +2562,8 @@ app.put("/users/settings", async (c) => {
   const { token, session } = await sessionFromRequest(c);
   const user = await getCurrentUser(c.env, session);
   if (!token || !session?.userId || !user) return c.json({ error: "Forbidden" }, 403);
+  const bannedResponse = await rejectBannedUser(c, user);
+  if (bannedResponse) return bannedResponse;
   const form = await parseForm(c.req.raw);
   if (!(await validCsrf(c, token, form))) return c.json({ error: "Forbidden" }, 403);
   if (form.action === "update_email" && !(await requestAllowed(c, c.env.ACCOUNT_EMAIL_LIMITER)))
@@ -1852,6 +2650,8 @@ app.get("/users/settings/confirm_email/:token", async (c) => {
   const { session } = await sessionFromRequest(c);
   const user = await getCurrentUser(c.env, session);
   if (!session?.userId || !user) return c.redirect("/users/log_in", 302);
+  const bannedResponse = await rejectBannedUser(c, user);
+  if (bannedResponse) return bannedResponse;
   const token = c.req.param("token");
   const pending = await findAccountToken(c.env, token, "change_email");
   if (!pending || pending.userId !== user.id) {
@@ -1904,11 +2704,24 @@ app.post("/api/paste", async (c) => {
   const parsed = pasteApiSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: "Invalid input" }, 400);
   const { session } = await sessionFromRequest(c);
+  const user = await getCurrentUser(c.env, session);
+  const bannedResponse = await rejectBannedUser(c, user);
+  if (bannedResponse) return bannedResponse;
   const { id, urlPaste } = await createStoredPaste(
     c,
     parsed.data.paste.content,
     session?.userId ?? null,
   );
+  await logAbuseSafely(c.env, {
+    ip: getClientIp(c.req.raw.headers),
+    eventType: "paste_created",
+    accountId: user?.id ?? null,
+    pasteId: id,
+    email: user?.email ?? null,
+  });
+  await recordMetricSafely(c.env, "paste_created");
+  await recordMetricSafely(c.env, user ? "paste_authed" : "paste_anon");
+  await recordMetricSafely(c.env, urlPaste ? "shortlink" : "text");
   return c.json({ id, content: parsed.data.paste.content, is_url: urlPaste }, 201);
 });
 
@@ -1925,6 +2738,9 @@ app.post("/", async (c) => {
   const token = getCookie(c, SESSION_COOKIE);
   const session = token ? await sessionFromToken(c.env, token) : null;
   if (!token || !session) return c.json({ error: "Forbidden" }, 403);
+  const user = await getCurrentUser(c.env, session);
+  const bannedResponse = await rejectBannedUser(c, user);
+  if (bannedResponse) return bannedResponse;
   const contentLength = Number(c.req.header("Content-Length"));
   if (contentLength > MAX_BODY_BYTES) return c.json({ error: "Payload too large" }, 413);
   const body = await c.req.raw.arrayBuffer();
@@ -1950,6 +2766,9 @@ app.post("/", async (c) => {
     ) {
       return c.json({ error: "Custom ID already taken" }, 400);
     }
+    if (await pasteIsTombstoned(c.env, customId)) {
+      return c.json({ error: "Custom ID is not available" }, 409);
+    }
     id = customId;
   }
   const content = parsed.data["paste[content]"];
@@ -1961,6 +2780,16 @@ app.post("/", async (c) => {
       return c.json({ error: "Custom ID already taken" }, 400);
     throw error;
   }
+  await logAbuseSafely(c.env, {
+    ip: getClientIp(c.req.raw.headers),
+    eventType: "paste_created",
+    accountId: user?.id ?? null,
+    pasteId: id,
+    email: user?.email ?? null,
+  });
+  await recordMetricSafely(c.env, "paste_created");
+  await recordMetricSafely(c.env, "paste_authed");
+  await recordMetricSafely(c.env, urlPaste ? "shortlink" : "text");
   return c.redirect(`${urlPaste ? "/v" : ""}/${id}`, 303);
 });
 
@@ -1986,6 +2815,7 @@ const findPaste = async (c: AppContext, value: string, includeContent = true) =>
     (await findById(path.id)) ??
     (path.fullId !== path.id ? await findById(path.fullId) : undefined);
   if (!paste || paste.deletedAt != null) return null;
+  if (paste.ownerId !== null && (await accountIsBanned(c.env, paste.ownerId))) return null;
   if (paste.storageType === "r2") {
     if (!paste.storageKey) return null;
     const object = await c.env.PASTES.get(paste.storageKey);
@@ -2002,6 +2832,8 @@ app.get("/pastes", async (c) => {
   const { token, session } = await sessionFromRequest(c);
   const user = await getCurrentUser(c.env, session);
   if (!token || !session?.userId || !user) return c.redirect("/users/log_in", 302);
+  const bannedResponse = await rejectBannedUser(c, user);
+  if (bannedResponse) return bannedResponse;
   const ownedPastes = await dbFor(c.env)
     .select({ id: pastes.id })
     .from(pastes)
@@ -2012,9 +2844,11 @@ app.get("/pastes", async (c) => {
 
 app.get("/edit/:id", async (c) => {
   const value = c.req.param("id");
-  const result = await findPaste(c, value);
   const { token, session } = await sessionFromRequest(c);
   const user = await getCurrentUser(c.env, session);
+  const bannedResponse = await rejectBannedUser(c, user);
+  if (bannedResponse) return bannedResponse;
+  const result = await findPaste(c, value);
   if (!result) return c.text("Not found", 404);
   if (!token || !user || result.paste.ownerId !== user.id) return ownershipError(c, value);
   return c.html(<EditPage csrf={await csrfToken(token)} user={user} paste={result.paste} />);
@@ -2033,8 +2867,10 @@ app.on(["PATCH", "PUT"], "/:id", async (c) => {
   const parsed = pasteFormSchema.safeParse(form);
   if (!parsed.success) return c.json({ error: "Invalid input" }, 400);
   const value = c.req.param("id");
-  const result = await findPaste(c, value);
   const user = await getCurrentUser(c.env, session);
+  const bannedResponse = await rejectBannedUser(c, user);
+  if (bannedResponse) return bannedResponse;
+  const result = await findPaste(c, value);
   if (!result) return c.text("Not found", 404);
   if (!user || result.paste.ownerId !== user.id) return ownershipError(c, value);
 
@@ -2090,8 +2926,10 @@ app.delete("/:id", async (c) => {
   const form = await parseForm(c.req.raw);
   if (!(await validCsrf(c, token, form))) return c.json({ error: "Forbidden" }, 403);
   const value = c.req.param("id");
-  const result = await findPaste(c, value, false);
   const user = await getCurrentUser(c.env, session);
+  const bannedResponse = await rejectBannedUser(c, user);
+  if (bannedResponse) return bannedResponse;
+  const result = await findPaste(c, value, false);
   if (!result) return c.text("Not found", 404);
   if (!user || result.paste.ownerId !== user.id) return ownershipError(c, value);
   const timestamp = new Date().toISOString();
@@ -2165,7 +3003,8 @@ function generateId() {
   }).join("");
 }
 
-app.onError((error, c) => {
+app.onError(async (error, c) => {
+  await recordMetricSafely(c.env, "server_error");
   console.error(
     JSON.stringify({
       error: error instanceof Error ? error.message : String(error),
