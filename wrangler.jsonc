@@ -40,6 +40,8 @@
       "name": "katbin-staging",
       "vars": {
         "ENVIRONMENT": "staging",
+        "CANONICAL_HOST": "staging.katb.in",
+        "ADMIN_USER_IDS": "1",
         "APPROVED_EMAIL_RECIPIENTS": "amolele@gmail.com",
       },
       "send_email": [
@@ -111,6 +113,8 @@
       "name": "katbin-production",
       "vars": {
         "ENVIRONMENT": "production",
+        "CANONICAL_HOST": "katb.in",
+        "ADMIN_USER_IDS": "1",
       },
       "workers_dev": false,
       "routes": [
