@@ -115,6 +115,8 @@
         "ENVIRONMENT": "production",
         "CANONICAL_HOST": "katb.in",
         "ADMIN_USER_IDS": "1",
+        "ACCESS_ISSUER": "https://sphericalkat.cloudflareaccess.com",
+        "ACCESS_AUDIENCE": "53ab74ea95117c08032247ab71ff4a0c9be153e15e211cd423af96cc40d44d24",
       },
       "workers_dev": false,
       "routes": [
