@@ -1,239 +1,233 @@
-.code {
+pre code.hljs,
+code.hljs,
+.code,
+.hljs {
   color: #c0c5ce;
-  background-color: #2b303b;
 }
-.variable.parameter.function {
+
+.hljs::selection,
+.hljs ::selection {
+  background-color: #4f5b66;
   color: #c0c5ce;
 }
-.comment {
-  color: #65737e;
-}
+
+/* Comments, quotes */
+.comment,
+.hljs-comment,
+.quote,
+.hljs-quote,
 .punctuation.definition.comment {
   color: #65737e;
 }
-.punctuation.definition.string {
-  color: #c0c5ce;
+
+/* XML / HTML tag brackets and delimiters */
+.tag,
+.hljs-tag {
+  color: #a7adba;
 }
-.punctuation.definition.variable {
-  color: #c0c5ce;
-}
-.punctuation.definition.string {
-  color: #c0c5ce;
-}
-.punctuation.definition.parameters {
-  color: #c0c5ce;
-}
-.punctuation.definition.string {
-  color: #c0c5ce;
-}
+
+/* Delimiters, operators, subst, punctuation, params */
+.subst,
+.hljs-subst,
+.punctuation,
+.hljs-punctuation,
+.operator,
+.hljs-operator,
+.keyword.operator,
+.params,
+.hljs-params,
+.punctuation.definition.parameters,
 .punctuation.definition.array {
   color: #c0c5ce;
 }
-.none {
-  color: #c0c5ce;
+
+.operator,
+.hljs-operator {
+  opacity: 0.7;
 }
-.keyword.operator {
-  color: #c0c5ce;
-}
-.keyword {
-  color: #b48ead;
-}
-.variable {
-  color: #bf616a;
-}
-.variable.other.dollar.only.js {
-  color: #bf616a;
-}
-.entity.name.function {
-  color: #8fa1b3;
-}
-.meta.require {
-  color: #8fa1b3;
-}
-.support.function.any-method {
-  color: #8fa1b3;
-}
-.variable.function {
-  color: #8fa1b3;
-}
-.support.class {
-  color: #ebcb8b;
-}
-.entity.name.class {
-  color: #ebcb8b;
-}
-.entity.name.type.class {
-  color: #ebcb8b;
-}
-.meta.class {
-  color: #eff1f5;
-}
-.keyword.other.special-method {
-  color: #8fa1b3;
-}
-.storage {
-  color: #b48ead;
-}
-.support.function {
-  color: #96b5b4;
-}
-.string {
-  color: #a3be8c;
-}
-.constant.other.symbol {
-  color: #a3be8c;
-}
-.entity.other.inherited-class {
-  color: #a3be8c;
-}
-.constant.numeric {
-  color: #d08770;
-}
-.none {
-  color: #d08770;
-}
-.none {
-  color: #d08770;
-}
-.constant {
-  color: #d08770;
-}
-.entity.name.tag {
-  color: #bf616a;
-}
-.entity.other.attribute-name {
-  color: #d08770;
-}
-.entity.other.attribute-name.id {
-  color: #8fa1b3;
-}
-.punctuation.definition.entity {
-  color: #8fa1b3;
-}
-.meta.selector {
-  color: #b48ead;
-}
-.none {
-  color: #d08770;
-}
-.markup.heading {
-  color: #8fa1b3;
-}
-.punctuation.definition.heading {
-  color: #8fa1b3;
-}
-.entity.name.section {
-  color: #8fa1b3;
-}
-.keyword.other.unit {
-  color: #d08770;
-}
-.markup.bold {
-  color: #ebcb8b;
-  font-weight: 700;
-}
-.punctuation.definition.bold {
-  color: #ebcb8b;
-  font-weight: 700;
-}
-.markup.italic {
-  color: #b48ead;
-  font-style: italic;
-}
-.punctuation.definition.italic {
-  color: #b48ead;
-  font-style: italic;
-}
-.markup.raw.inline {
-  color: #a3be8c;
-}
-.string.other.link {
-  color: #bf616a;
-}
-.meta.link {
-  color: #d08770;
-}
-.meta.image {
-  color: #d08770;
-}
+
+/* Variables, tag names, bullets, deletions */
+.bullet,
+.hljs-bullet,
+.variable,
+.hljs-variable,
+.variable.other.dollar.only.js,
+.template-variable,
+.hljs-template-variable,
+.selector-tag,
+.hljs-selector-tag,
+.name,
+.hljs-name,
+.deletion,
+.hljs-deletion,
+.entity.name.tag,
+.markup.deleted,
+.markup.deleted.git_gutter,
 .markup.list {
   color: #bf616a;
 }
+
+/* Numbers, attributes, booleans, constants, symbols, links */
+.number,
+.hljs-number,
+.constant.numeric,
+.symbol,
+.hljs-symbol,
+.constant.other.symbol,
+.link,
+.hljs-link,
+.attr,
+.hljs-attr,
+.entity.other.attribute-name,
+.variable.constant_,
+.hljs-variable.constant_,
+.literal,
+.hljs-literal,
+.constant,
+.keyword.other.unit,
+.meta.link,
+.meta.image,
 .markup.quote {
   color: #d08770;
 }
-.meta.separator {
-  color: #c0c5ce;
-  background-color: #4f5b66;
+
+/* Classes, types, titles, bold */
+.title,
+.hljs-title,
+.class .title,
+.hljs-class .hljs-title,
+.title.class_,
+.hljs-title.class_,
+.support.class,
+.entity.name.class,
+.entity.name.type.class,
+.meta.class,
+.markup.bold,
+.punctuation.definition.bold {
+  color: #ebcb8b;
 }
-.markup.inserted {
-  color: #a3be8c;
+
+.strong,
+.hljs-strong {
+  font-weight: 700;
+  color: #ebcb8b;
 }
+
+/* Strings, additions, markup code */
+.string,
+.hljs-string,
+.punctuation.definition.string,
+.code,
+.hljs-code,
+.addition,
+.hljs-addition,
+.title.class_.inherited__,
+.hljs-title.class_.inherited__,
+.entity.other.inherited-class,
+.markup.raw.inline,
+.markup.inserted,
 .markup.inserted.git_gutter {
   color: #a3be8c;
 }
-.markup.deleted {
-  color: #bf616a;
-}
-.markup.deleted.git_gutter {
-  color: #bf616a;
-}
-.markup.changed {
-  color: #b48ead;
-}
-.markup.changed.git_gutter {
-  color: #b48ead;
-}
-.markup.ignored {
-  color: #4f5b66;
-}
-.markup.ignored.git_gutter {
-  color: #4f5b66;
-}
-.markup.untracked {
-  color: #4f5b66;
-}
-.markup.untracked.git_gutter {
-  color: #4f5b66;
-}
+
+/* Built-in functions/types, doctags, regex, escapes */
+.built_in,
+.hljs-built_in,
+.doctag,
+.hljs-doctag,
+.regexp,
+.hljs-regexp,
+.string.regexp,
+.char.escape_,
+.hljs-char.escape_,
+.constant.character.escape,
+.support.function,
+.support.function.any-method,
 .constant.other.color {
   color: #96b5b4;
 }
-.string.regexp {
-  color: #96b5b4;
+
+/* Functions, methods, attribute IDs, headings */
+.function .title,
+.hljs-function .hljs-title,
+.attribute,
+.hljs-attribute,
+.property,
+.hljs-property,
+.title.function_,
+.hljs-title.function_,
+.entity.name.function,
+.variable.function,
+.meta.require,
+.keyword.other.special-method,
+.entity.other.attribute-name.id,
+.punctuation.definition.entity,
+.section,
+.hljs-section,
+.markup.heading,
+.punctuation.definition.heading,
+.entity.name.section {
+  color: #8fa1b3;
 }
-.constant.character.escape {
-  color: #96b5b4;
+
+/* Keywords, storage, types, selectors */
+.type,
+.hljs-type,
+.template-tag,
+.hljs-template-tag,
+.keyword,
+.hljs-keyword,
+.storage,
+.meta.selector,
+.markup.changed,
+.markup.changed.git_gutter,
+.markup.italic,
+.punctuation.definition.italic {
+  color: #b48ead;
 }
-.punctuation.section.embedded {
-  color: #ab7967;
+
+.emphasis,
+.hljs-emphasis {
+  color: #b48ead;
+  font-style: italic;
 }
+
+/* Meta, preprocessor, embedded language tags */
+.meta,
+.hljs-meta,
+.meta .keyword,
+.hljs-meta .hljs-keyword,
+.meta .string,
+.hljs-meta .hljs-string,
+.punctuation.section.embedded,
 .variable.interpolation {
   color: #ab7967;
 }
+
+/* Selectors in CSS/SCSS/LESS */
+.selector-id,
+.hljs-selector-id,
+.selector-class,
+.hljs-selector-class {
+  color: #8fa1b3;
+}
+
+.selector-attr,
+.hljs-selector-attr {
+  color: #d08770;
+}
+
+.selector-pseudo,
+.hljs-selector-pseudo {
+  color: #96b5b4;
+}
+
 .invalid.illegal {
   color: #2b303b;
   background-color: #bf616a;
 }
-.markup.deleted.git_gutter {
-  color: #f92672;
-}
-.markup.inserted.git_gutter {
-  color: #a6e22e;
-}
-.markup.changed.git_gutter {
-  color: #967efb;
-}
-.markup.ignored.git_gutter {
-  color: #565656;
-}
-.markup.untracked.git_gutter {
-  color: #565656;
-}
-.source .block {
-  display: inline;
-}
 
+.source .block,
 span .block {
-	display: inline;
+  display: inline;
 }

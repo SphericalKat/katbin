@@ -139,7 +139,9 @@ const PasteContent: FC<{
       ></textarea>
     );
 
-  if (extension === "md") {
+  const ext = extension.split(".").at(-1) ?? extension;
+
+  if (extension === "md" || ext === "md") {
     return (
       <div class="break-word h-full w-full overflow-y-auto px-6 py-4 markdown">
         {raw(safeMarkdownHtml(content))}
@@ -147,14 +149,22 @@ const PasteContent: FC<{
     );
   }
 
-  const language = hljs.getLanguage(extension);
-  if (!language) {
+  if (extension === "auto" || !extension) {
+    return (
+      <pre class="break-word whitespace-pre-wrap px-6 py-4">
+        <code class="hljs">{raw(hljs.highlightAuto(content).value)}</code>
+      </pre>
+    );
+  }
+
+  const lang = hljs.getLanguage(extension) ? extension : hljs.getLanguage(ext) ? ext : undefined;
+  if (!lang) {
     return <pre class="break-word whitespace-pre-wrap px-6 py-4">{content}</pre>;
   }
 
   return (
     <pre class="break-word whitespace-pre-wrap px-6 py-4">
-      <code class="hljs">{raw(hljs.highlight(content, { language: extension }).value)}</code>
+      <code class="hljs">{raw(hljs.highlight(content, { language: lang }).value)}</code>
     </pre>
   );
 };

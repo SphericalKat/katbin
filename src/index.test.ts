@@ -52,9 +52,9 @@ describe("Katbin shell", () => {
     const display = await app.request(`https://katb.in/${id}`, undefined, { DB: db } as never);
     const raw = await app.request(`https://katb.in/${id}/raw`, undefined, { DB: db } as never);
     expect(display.status).toBe(200);
-    expect(await display.text()).toContain(
-      "&lt;script&gt;alert(&quot;escaped&quot;)&lt;/script&gt;",
-    );
+    const displayBody = await display.text();
+    expect(displayBody).toContain('<span class="string">&quot;escaped&quot;</span>');
+    expect(displayBody).not.toContain('<script>alert("escaped")</script>');
     expect(raw.status).toBe(200);
     expect(await raw.text()).toBe(content);
   });
@@ -185,13 +185,17 @@ describe("Katbin shell", () => {
     expect(urlPreview.status).toBe(200);
     expect(await urlPreview.text()).toContain("https://example.com/docs");
     expect(textPreview.status).toBe(200);
-    expect(await textPreview.text()).toContain("plain text");
+    const textPreviewBody = await textPreview.text();
+    expect(textPreviewBody).toContain("plain");
+    expect(textPreviewBody).toContain("text");
     expect(textDisplay.status).toBe(200);
     expect(await textDisplay.text()).toContain("plain text");
     expect(textRaw.status).toBe(200);
     expect(await textRaw.text()).toBe("plain text");
     expect(mailtoDisplay.status).toBe(200);
-    expect(await mailtoDisplay.text()).toContain("mailto:user@example.com");
+    const mailtoBody = await mailtoDisplay.text();
+    expect(mailtoBody).toContain("mailto:");
+    expect(mailtoBody).toContain("@example");
   });
 
   it("renders safe Markdown, supported source, and escaped unsupported pastes", async () => {
