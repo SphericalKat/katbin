@@ -774,6 +774,31 @@ const Footer: FC = () => (
   </footer>
 );
 
+const SaveButton: FC = () => (
+  <button
+    type="submit"
+    class="group relative inline-flex items-center gap-2 rounded-sm p-1 outline-none focus-visible:ring-2 focus-visible:ring-amber"
+    aria-label="Save paste"
+    title="Save paste"
+  >
+    <svg
+      class="h-6 w-6 fill-current text-white transition-colors group-hover:text-amber group-focus-visible:text-amber"
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path d="M17.6 3.6c-.4-.4-.9-.6-1.4-.6H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V7.8c0-.5-.2-1-.6-1.4l-2.8-2.8zM12 19c-1.7 0-3-1.3-3-3s1.3-3 3-3 3 1.3 3 3-1.3 3-3 3zm1-10H7c-1.1 0-2-.9-2-2s.9-2 2-2h6c1.1 0 2 .9 2 2s-.9 2-2 2z" />
+    </svg>
+    <kbd
+      data-save-shortcut
+      class="invisible hidden select-none items-center rounded border border-white/20 bg-header px-1.5 py-0.5 text-[11px] font-medium leading-none text-white/70 transition-colors group-hover:border-amber group-hover:text-amber group-focus-visible:border-amber group-focus-visible:text-amber sm:inline-flex"
+      aria-hidden="true"
+    >
+      Ctrl+S
+    </kbd>
+  </button>
+);
+
 const Home: FC<{ csrf: string; user: User | null; info?: string; error?: string }> = ({
   csrf,
   user,
@@ -784,7 +809,7 @@ const Home: FC<{ csrf: string; user: User | null; info?: string; error?: string 
     <Header csrf={csrf} user={user} />
     <main class="flex h-full max-h-full w-full flex-col overflow-hidden bg-light-grey">
       <FlashMessages info={info} error={error} />
-      <form class="relative flex h-full w-full flex-col" action="/" method="post">
+      <form class="relative flex h-full w-full flex-col" action="/" method="post" data-paste-form>
         <input type="hidden" name="_csrf" value={csrf} />
         <div class="h-full w-full">
           <textarea
@@ -793,7 +818,7 @@ const Home: FC<{ csrf: string; user: User | null; info?: string; error?: string 
             placeholder="> Paste, save, share! (Pasting just a URL will shorten it!)"
             aria-label="Paste content"
           />
-          <div class="absolute right-0 top-0 p-4">
+          <div class="absolute right-0 top-0 flex items-center p-4">
             {user ? (
               <input
                 class="mr-2 px-2 py-1 text-black outline-none"
@@ -803,16 +828,7 @@ const Home: FC<{ csrf: string; user: User | null; info?: string; error?: string 
                 pattern="[A-Za-z0-9_-]{1,64}"
               />
             ) : null}
-            <button type="submit" aria-label="Save paste">
-              <svg
-                class="h-6 w-6 cursor-pointer fill-current text-white hover:text-amber"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path d="M17.6 3.6c-.4-.4-.9-.6-1.4-.6H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V7.8c0-.5-.2-1-.6-1.4l-2.8-2.8zM12 19c-1.7 0-3-1.3-3-3s1.3-3 3-3 3 1.3 3 3-1.3 3-3 3zm1-10H7c-1.1 0-2-.9-2-2s.9-2 2-2h6c1.1 0 2 .9 2 2s-.9 2-2 2z" />
-              </svg>
-            </button>
+            <SaveButton />
           </div>
         </div>
       </form>
@@ -1357,6 +1373,7 @@ const EditPage: FC<{ csrf: string; user: User; paste: { id: string; content: str
           action={`/${paste.id}`}
           method="post"
           data-method="PATCH"
+          data-paste-form
         >
           <input type="hidden" name="_csrf" value={csrf} />
           <textarea
@@ -1366,16 +1383,9 @@ const EditPage: FC<{ csrf: string; user: User; paste: { id: string; content: str
           >
             {paste.content}
           </textarea>
-          <button class="absolute right-0 top-0 p-4" type="submit" aria-label="Save paste">
-            <svg
-              class="h-6 w-6 cursor-pointer fill-current text-white hover:text-amber"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path d="M17.6 3.6c-.4-.4-.9-.6-1.4-.6H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V7.8c0-.5-.2-1-.6-1.4l-2.8-2.8zM12 19c-1.7 0-3-1.3-3-3s1.3-3 3-3 3 1.3 3 3-1.3 3-3 3zm1-10H7c-1.1 0-2-.9-2-2s.9-2 2-2h6c1.1 0 2 .9 2 2s-.9 2-2 2z" />
-            </svg>
-          </button>
+          <div class="absolute right-0 top-0 p-4">
+            <SaveButton />
+          </div>
         </form>
       </main>
       <Footer />

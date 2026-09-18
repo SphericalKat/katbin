@@ -55,6 +55,21 @@ document.querySelectorAll("form").forEach((form) => {
   });
 });
 
+const saveShortcut = document.querySelector("[data-save-shortcut]");
+const pasteForm = document.querySelector("form[data-paste-form]");
+const saveButton = pasteForm?.querySelector('button[type="submit"]');
+
+if (saveShortcut && saveButton instanceof HTMLButtonElement) {
+  const platform =
+    navigator.userAgentData?.platform || navigator.platform || navigator.userAgent || "";
+  const isApplePlatform = /Mac|iPhone|iPad|iPod/i.test(platform);
+  const shortcut = isApplePlatform ? "⌘S" : "Ctrl+S";
+  saveShortcut.textContent = shortcut;
+  saveButton.title = `Save paste (${shortcut})`;
+  saveButton.setAttribute("aria-keyshortcuts", isApplePlatform ? "Meta+S" : "Control+S");
+  saveShortcut.classList.remove("invisible");
+}
+
 const fetchText = async (url) => {
   const response = await fetch(url);
   if (!response.ok) throw new Error("Paste request failed");
@@ -109,7 +124,21 @@ const registerPasteCopyHandlers = () => {
 registerPasteCopyHandlers();
 
 document.addEventListener("keydown", (event) => {
-  if (!(event.metaKey || event.ctrlKey) || event.key !== "Enter") return;
+  if (!(event.metaKey || event.ctrlKey)) return;
+
+  if (event.key.toLowerCase() === "s" && !event.altKey) {
+    if (!(pasteForm instanceof HTMLFormElement) || !(saveButton instanceof HTMLButtonElement)) {
+      return;
+    }
+    event.preventDefault();
+    if (pasteForm.dataset.submitting === "true" || saveButton.disabled || event.repeat) {
+      return;
+    }
+    pasteForm.requestSubmit(saveButton);
+    return;
+  }
+
+  if (event.key !== "Enter") return;
   if (!(event.target instanceof HTMLTextAreaElement)) return;
   event.target.form?.requestSubmit();
 });
