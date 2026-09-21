@@ -13,18 +13,40 @@ const registerAccountMenu = () => {
 if (window.Alpine) registerAccountMenu();
 else document.addEventListener("alpine:init", registerAccountMenu, { once: true });
 
+const pasteForm = document.querySelector("form[data-paste-form]");
+const saveButton = pasteForm?.querySelector('button[type="submit"]');
+const editor = pasteForm?.querySelector('textarea[name="paste[content]"]');
+
+const syncSaveButton = () => {
+  if (saveButton && editor) {
+    const isEmpty = editor.value.trim().length === 0;
+    const isSubmitting = pasteForm?.dataset.submitting === "true";
+    saveButton.disabled = isEmpty || isSubmitting;
+  }
+};
+
+editor?.addEventListener("input", syncSaveButton);
+syncSaveButton();
+window.addEventListener("pageshow", syncSaveButton);
+
 const setFormLoading = (form, loading) => {
   form.toggleAttribute("aria-busy", loading);
   form.dataset.submitting = String(loading);
   const button = form.querySelector('button[type="submit"]');
   button?.classList.toggle("is-loading", loading);
   if (button) button.disabled = loading;
+  syncSaveButton();
 };
 
 document.querySelectorAll("form").forEach((form) => {
   form.addEventListener("submit", (event) => {
     if (form.dataset.submitting === "true") {
       event.preventDefault();
+      return;
+    }
+    if (form === pasteForm && editor?.value.trim().length === 0) {
+      event.preventDefault();
+      syncSaveButton();
       return;
     }
     if (form.dataset.confirm && !window.confirm(form.dataset.confirm)) {
@@ -56,16 +78,14 @@ document.querySelectorAll("form").forEach((form) => {
 });
 
 const saveShortcut = document.querySelector("[data-save-shortcut]");
-const pasteForm = document.querySelector("form[data-paste-form]");
-const saveButton = pasteForm?.querySelector('button[type="submit"]');
 
 if (saveShortcut && saveButton instanceof HTMLButtonElement) {
   const platform =
     navigator.userAgentData?.platform || navigator.platform || navigator.userAgent || "";
   const isApplePlatform = /Mac|iPhone|iPad|iPod/i.test(platform);
-  const shortcut = isApplePlatform ? "⌘S" : "Ctrl+S";
-  saveShortcut.textContent = shortcut;
-  saveButton.title = `Save paste (${shortcut})`;
+  const modifier = saveShortcut.querySelector("[data-save-modifier]");
+  if (modifier) modifier.textContent = isApplePlatform ? "⌘" : "Ctrl";
+  saveButton.title = `Save paste (${isApplePlatform ? "⌘S" : "Ctrl+S"})`;
   saveButton.setAttribute("aria-keyshortcuts", isApplePlatform ? "Meta+S" : "Control+S");
   saveShortcut.classList.remove("invisible");
 }
@@ -131,7 +151,13 @@ document.addEventListener("keydown", (event) => {
       return;
     }
     event.preventDefault();
-    if (pasteForm.dataset.submitting === "true" || saveButton.disabled || event.repeat) {
+    if (
+      !(editor instanceof HTMLTextAreaElement) ||
+      editor.value.trim().length === 0 ||
+      pasteForm.dataset.submitting === "true" ||
+      saveButton.disabled ||
+      event.repeat
+    ) {
       return;
     }
     pasteForm.requestSubmit(saveButton);
@@ -140,5 +166,18 @@ document.addEventListener("keydown", (event) => {
 
   if (event.key !== "Enter") return;
   if (!(event.target instanceof HTMLTextAreaElement)) return;
+  if (event.target === editor) {
+    if (
+      !(pasteForm instanceof HTMLFormElement) ||
+      !(saveButton instanceof HTMLButtonElement) ||
+      editor.value.trim().length === 0 ||
+      pasteForm.dataset.submitting === "true" ||
+      saveButton.disabled
+    ) {
+      event.preventDefault();
+      syncSaveButton();
+      return;
+    }
+  }
   event.target.form?.requestSubmit();
 });

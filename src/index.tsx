@@ -784,28 +784,36 @@ const Footer: FC = () => (
   </footer>
 );
 
-const SaveButton: FC = () => (
+const keycapClass =
+  "inline-flex h-[20px] min-w-[20px] items-center justify-center rounded-[4px] border border-white/15 bg-white/[0.06] px-1.5 text-[11px] font-medium leading-none text-white/70 [font-family:inherit] shadow-[inset_0_-1px_0_rgba(255,255,255,0.1),0_1px_1px_rgba(0,0,0,0.3)] transition-colors group-hover:border-white/30 group-hover:text-white";
+
+const SaveButton: FC<{ disabled?: boolean }> = ({ disabled }) => (
   <button
     type="submit"
-    class="group relative inline-flex items-center gap-2 rounded-sm p-1 outline-none focus-visible:ring-2 focus-visible:ring-amber"
+    class="group inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-white/15 bg-header px-2.5 text-white shadow-sm transition-all duration-150 enabled:hover:border-white/30 enabled:hover:bg-white/[0.05] enabled:active:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 focus-visible:ring-offset-light-grey disabled:cursor-not-allowed disabled:opacity-40"
     aria-label="Save paste"
     title="Save paste"
+    disabled={disabled}
   >
     <svg
-      class="h-6 w-6 fill-current text-white transition-colors group-hover:text-amber group-focus-visible:text-amber"
+      class="h-3.5 w-3.5 fill-current text-white/70 transition-colors group-hover:text-amber group-focus-visible:text-amber"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       aria-hidden="true"
     >
       <path d="M17.6 3.6c-.4-.4-.9-.6-1.4-.6H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V7.8c0-.5-.2-1-.6-1.4l-2.8-2.8zM12 19c-1.7 0-3-1.3-3-3s1.3-3 3-3 3 1.3 3 3-1.3 3-3 3zm1-10H7c-1.1 0-2-.9-2-2s.9-2 2-2h6c1.1 0 2 .9 2 2s-.9 2-2 2z" />
     </svg>
-    <kbd
+    <span class="text-xs font-semibold leading-none">Save</span>
+    <span
       data-save-shortcut
-      class="invisible hidden select-none items-center rounded border border-white/20 bg-header px-1.5 py-0.5 text-[11px] font-medium leading-none text-white/70 transition-colors group-hover:border-amber group-hover:text-amber group-focus-visible:border-amber group-focus-visible:text-amber sm:inline-flex"
+      class="invisible hidden select-none items-center gap-1 sm:inline-flex"
       aria-hidden="true"
     >
-      Ctrl+S
-    </kbd>
+      <kbd data-save-modifier class={keycapClass}>
+        Ctrl
+      </kbd>
+      <kbd class={keycapClass}>S</kbd>
+    </span>
   </button>
 );
 
@@ -838,7 +846,7 @@ const Home: FC<{ csrf: string; user: User | null; info?: string; error?: string 
                 pattern="[A-Za-z0-9_-]{1,64}"
               />
             ) : null}
-            <SaveButton />
+            <SaveButton disabled={true} />
           </div>
         </div>
       </form>
@@ -1394,7 +1402,7 @@ const EditPage: FC<{ csrf: string; user: User; paste: { id: string; content: str
             {paste.content}
           </textarea>
           <div class="absolute right-0 top-0 p-4">
-            <SaveButton />
+            <SaveButton disabled={paste.content.trim().length === 0} />
           </div>
         </form>
       </main>
