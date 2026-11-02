@@ -1,0 +1,1015 @@
+openapi: 3.1.0
+info:
+  title: Katbin
+  version: 0.0.0
+  summary: Pastebin and URL shortener routes.
+  description: |
+    Katbin serves HTML pages, browser forms, and a small JSON paste API from one Worker.
+
+    Session routes use the `__Host-katbin_session` cookie.
+    A visit to `GET /` creates an anonymous session when no cookie is present.
+    State-changing browser form routes also require a CSRF token.
+
+    Read the `_csrf` token from the `_csrf` form field in any rendered page.
+    The token is derived from the session token.
+    Send it back in the same form request.
+    The JSON paste API does not use CSRF tokens.
+
+    Rate limits apply per client IP.
+    A limited request returns `429`.
+    A banned IP or a banned account returns `403`.
+    When the request accepts HTML, that `403` is an HTML page.
+    Otherwise it is a JSON error.
+
+servers:
+  - url: https://katb.in
+    description: Production
+  - url: http://localhost:5173
+    description: Local development
+
+tags:
+  - name: Pages
+    description: Public HTML pages.
+  - name: Auth
+    description: Browser account flows.
+  - name: Pastes
+    description: Browser paste forms.
+  - name: Paste API
+    description: JSON paste API.
+
+security: []
+
+paths:
+  /:
+    get:
+      tags: [Pages]
+      operationId: homePage
+      summary: Home page and paste form
+      description: |
+        Returns the home page.
+        Creates an anonymous session and sets the session cookie when no session exists.
+      responses:
+        "200":
+          $ref: "#/components/responses/Html"
+        "403":
+          $ref: "#/components/responses/Blocked"
+    post:
+      tags: [Pastes]
+      operationId: createPasteForm
+      summary: Create a paste from the browser form
+      description: |
+        Creates a paste and redirects to the saved paste page.
+        URL content redirects to `/v/{id}`.
+        Other content redirects to `/{id}`.
+
+        A session cookie is required.
+        The home page creates an anonymous session for you.
+        A custom ID requires a signed-in account.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [_csrf, "paste[content]"]
+              properties:
+                _csrf:
+                  $ref: "#/components/schemas/Csrf"
+                "paste[content]":
+                  type: string
+                  minLength: 1
+                  maxLength: 10000000
+                  description: Original paste content.
+                "paste[custom_url]":
+                  type: string
+                  pattern: "^[A-Za-z0-9_-]{1,64}$"
+                  description: |
+                    Optional custom paste ID.
+                    Requires a signed-in account.
+                    Reserved IDs are rejected.
+      responses:
+        "303":
+          $ref: "#/components/responses/Redirect303"
+        "400":
+          description: Invalid input, invalid custom ID, or taken custom ID.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Custom ID belongs to deleted content.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /v/{id}:
+    get:
+      tags: [Pages]
+      operationId: showShortlinkPaste
+      summary: Show a URL paste page
+      description: |
+        Renders the saved paste page for a URL paste.
+        This route does not redirect to the stored URL.
+      parameters:
+        - $ref: "#/components/parameters/PasteId"
+      responses:
+        "200":
+          $ref: "#/components/responses/Html"
+        "403":
+          $ref: "#/components/responses/Blocked"
+        "404":
+          $ref: "#/components/responses/NotFoundText"
+
+  /{id}/raw:
+    get:
+      tags: [Pages]
+      operationId: rawPaste
+      summary: Read original paste content
+      parameters:
+        - $ref: "#/components/parameters/PasteId"
+      responses:
+        "200":
+          description: Original paste content.
+          content:
+            text/plain:
+              schema:
+                type: string
+        "403":
+          $ref: "#/components/responses/Blocked"
+        "404":
+          description: Paste not found.
+          content:
+            text/plain:
+              schema:
+                type: string
+        "429":
+          description: Too many paste reads or too many invalid paste reads.
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /pastes:
+    get:
+      tags: [Pastes]
+      operationId: listOwnedPastes
+      summary: List owned pastes
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          $ref: "#/components/responses/Html"
+        "302":
+          description: Redirect to the login page when not signed in.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                example: /users/log_in
+        "403":
+          $ref: "#/components/responses/Blocked"
+
+  /edit/{id}:
+    get:
+      tags: [Pastes]
+      operationId: editPastePage
+      summary: Show the paste edit page
+      description: |
+        Only the owner can open the edit page.
+        Other callers redirect to the saved paste page.
+      parameters:
+        - $ref: "#/components/parameters/PasteId"
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          $ref: "#/components/responses/Html"
+        "302":
+          description: Redirect to the saved paste page when the caller is not the owner.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+        "403":
+          $ref: "#/components/responses/Blocked"
+        "404":
+          $ref: "#/components/responses/NotFoundText"
+
+  /{id}:
+    get:
+      tags: [Pages]
+      operationId: showPaste
+      summary: Show a saved paste
+      description: |
+        Renders the saved paste page.
+        URL pastes redirect to their stored URL instead.
+        The `id` may include a file extension, such as `abc123.md`.
+      parameters:
+        - $ref: "#/components/parameters/PasteId"
+      responses:
+        "200":
+          $ref: "#/components/responses/Html"
+        "302":
+          description: URL paste redirect to the stored URL.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                format: uri
+        "403":
+          $ref: "#/components/responses/Blocked"
+        "404":
+          $ref: "#/components/responses/NotFoundText"
+    put:
+      tags: [Pastes]
+      operationId: updatePaste
+      summary: Update an owned paste
+      description: |
+        Updates the original paste content.
+        Only the owner can update the paste.
+        Non-owners redirect to the saved paste page.
+      parameters:
+        - $ref: "#/components/parameters/PasteId"
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [_csrf, "paste[content]"]
+              properties:
+                _csrf:
+                  $ref: "#/components/schemas/Csrf"
+                "paste[content]":
+                  type: string
+                  minLength: 1
+                  maxLength: 10000000
+      responses:
+        "303":
+          $ref: "#/components/responses/Redirect303"
+        "302":
+          description: Redirect to the saved paste page when the caller is not the owner.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+        "400":
+          description: Invalid input.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFoundText"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+    patch:
+      tags: [Pastes]
+      operationId: patchPaste
+      summary: Update an owned paste
+      description: Same behavior as `PUT /{id}`.
+      parameters:
+        - $ref: "#/components/parameters/PasteId"
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [_csrf, "paste[content]"]
+              properties:
+                _csrf:
+                  $ref: "#/components/schemas/Csrf"
+                "paste[content]":
+                  type: string
+                  minLength: 1
+                  maxLength: 10000000
+      responses:
+        "303":
+          $ref: "#/components/responses/Redirect303"
+        "302":
+          description: Redirect to the saved paste page when the caller is not the owner.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+        "400":
+          description: Invalid input.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFoundText"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+    delete:
+      tags: [Pastes]
+      operationId: deletePaste
+      summary: Delete an owned paste
+      description: |
+        Marks the paste as deleted and redirects to the home page.
+        Only the owner can delete the paste.
+      parameters:
+        - $ref: "#/components/parameters/PasteId"
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [_csrf]
+              properties:
+                _csrf:
+                  $ref: "#/components/schemas/Csrf"
+      responses:
+        "303":
+          description: Redirect to the home page.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                example: /
+        "302":
+          description: Redirect to the saved paste page when the caller is not the owner.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFoundText"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+
+  /users/register:
+    get:
+      tags: [Auth]
+      operationId: registerPage
+      summary: Show the registration page
+      responses:
+        "200":
+          $ref: "#/components/responses/Html"
+        "302":
+          description: Redirect to the home page when already signed in.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                example: /
+        "403":
+          $ref: "#/components/responses/Blocked"
+    post:
+      tags: [Auth]
+      operationId: registerAccount
+      summary: Register an account
+      description: |
+        Creates an account, sends a confirmation email, signs the account in,
+        and redirects to the confirmation page.
+        Validation and duplicate email errors render the form again with `200`.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [_csrf, "user[email]", "user[password]"]
+              properties:
+                _csrf:
+                  $ref: "#/components/schemas/Csrf"
+                "user[email]":
+                  type: string
+                  maxLength: 160
+                  example: user@example.com
+                "user[password]":
+                  type: string
+                  minLength: 8
+                  maxLength: 80
+      responses:
+        "200":
+          description: Form with field errors.
+          content:
+            text/html:
+              schema:
+                type: string
+        "303":
+          description: Redirect to the confirmation page.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                example: /users/confirm
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /users/confirm:
+    get:
+      tags: [Auth]
+      operationId: confirmationPage
+      summary: Show the account confirmation request page
+      responses:
+        "200":
+          $ref: "#/components/responses/Html"
+        "403":
+          $ref: "#/components/responses/Blocked"
+    post:
+      tags: [Auth]
+      operationId: requestConfirmationEmail
+      summary: Request another confirmation email
+      description: |
+        Sends a confirmation email when the address belongs to an unconfirmed account.
+        The response is the same for unknown addresses.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [_csrf, "user[email]"]
+              properties:
+                _csrf:
+                  $ref: "#/components/schemas/Csrf"
+                "user[email]":
+                  type: string
+                  maxLength: 160
+      responses:
+        "303":
+          description: Redirect to the home page.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                example: /
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /users/confirm/{token}:
+    get:
+      tags: [Auth]
+      operationId: confirmAccount
+      summary: Confirm an account from an email link
+      parameters:
+        - $ref: "#/components/parameters/AccountToken"
+      responses:
+        "302":
+          description: Redirect to the home page.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                example: /
+        "403":
+          $ref: "#/components/responses/Blocked"
+
+  /users/reset_password:
+    get:
+      tags: [Auth]
+      operationId: resetPasswordRequestPage
+      summary: Show the password reset request page
+      responses:
+        "200":
+          $ref: "#/components/responses/Html"
+        "403":
+          $ref: "#/components/responses/Blocked"
+    post:
+      tags: [Auth]
+      operationId: requestPasswordReset
+      summary: Request a password reset email
+      description: |
+        Sends a password reset email when the address belongs to an account.
+        The response is the same for unknown addresses.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [_csrf, "user[email]"]
+              properties:
+                _csrf:
+                  $ref: "#/components/schemas/Csrf"
+                "user[email]":
+                  type: string
+                  maxLength: 160
+      responses:
+        "303":
+          description: Redirect to the home page.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                example: /
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /users/reset_password/{token}:
+    get:
+      tags: [Auth]
+      operationId: resetPasswordPage
+      summary: Show the password reset page
+      parameters:
+        - $ref: "#/components/parameters/AccountToken"
+      responses:
+        "200":
+          $ref: "#/components/responses/Html"
+        "302":
+          description: Redirect to the home page when the token is invalid or expired.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                example: /
+        "403":
+          $ref: "#/components/responses/Blocked"
+    put:
+      tags: [Auth]
+      operationId: resetPassword
+      summary: Set a new password with a reset token
+      description: |
+        Sets the password, revokes existing sessions, and redirects to the login page.
+        Invalid input renders the form again with `200`.
+      parameters:
+        - $ref: "#/components/parameters/AccountToken"
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [_csrf, "user[password]", "user[password_confirmation]"]
+              properties:
+                _csrf:
+                  $ref: "#/components/schemas/Csrf"
+                "user[password]":
+                  type: string
+                  minLength: 8
+                  maxLength: 80
+                "user[password_confirmation]":
+                  type: string
+      responses:
+        "200":
+          description: Form with field errors.
+          content:
+            text/html:
+              schema:
+                type: string
+        "303":
+          description: Redirect to the login page after a successful reset.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                example: /users/log_in
+        "302":
+          description: Redirect to the home page when the token is invalid or expired.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                example: /
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /users/log_in:
+    get:
+      tags: [Auth]
+      operationId: loginPage
+      summary: Show the login page
+      responses:
+        "200":
+          $ref: "#/components/responses/Html"
+        "302":
+          description: Redirect to the home page when already signed in.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                example: /
+        "403":
+          $ref: "#/components/responses/Blocked"
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Sign in
+      description: |
+        Signs in with email and password, rotates the session, and redirects to the home page.
+        Invalid credentials render the form again with `200`.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [_csrf, "user[email]", "user[password]"]
+              properties:
+                _csrf:
+                  $ref: "#/components/schemas/Csrf"
+                "user[email]":
+                  type: string
+                "user[password]":
+                  type: string
+                "user[remember_me]":
+                  type: string
+                  enum: ["true"]
+                  description: Extends the session cookie lifetime.
+      responses:
+        "200":
+          description: Form with an invalid credentials error.
+          content:
+            text/html:
+              schema:
+                type: string
+        "303":
+          description: Redirect to the home page.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                example: /
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /users/log_out:
+    delete:
+      tags: [Auth]
+      operationId: logout
+      summary: Sign out
+      description: |
+        Deletes the session and clears the session cookie.
+        When a session exists, the request also requires the CSRF token.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                _csrf:
+                  $ref: "#/components/schemas/Csrf"
+      responses:
+        "303":
+          description: Redirect to the home page.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                example: /
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /users/settings:
+    get:
+      tags: [Auth]
+      operationId: settingsPage
+      summary: Show account settings
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          $ref: "#/components/responses/Html"
+        "302":
+          description: Redirect to the login page when not signed in.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                example: /users/log_in
+        "403":
+          $ref: "#/components/responses/Blocked"
+    put:
+      tags: [Auth]
+      operationId: updateSettings
+      summary: Update account email or password
+      description: |
+        Use `action=update_email` to request an email change.
+        Use `action=update_password` to change the password and rotate the session.
+        Field errors render the settings page again with `200`.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [_csrf, action, current_password]
+              properties:
+                _csrf:
+                  $ref: "#/components/schemas/Csrf"
+                action:
+                  type: string
+                  enum: [update_email, update_password]
+                current_password:
+                  type: string
+                "user[email]":
+                  type: string
+                  maxLength: 160
+                  description: Required when `action` is `update_email`.
+                "user[password]":
+                  type: string
+                  minLength: 8
+                  maxLength: 80
+                  description: Required when `action` is `update_password`.
+                "user[password_confirmation]":
+                  type: string
+                  description: Required when `action` is `update_password`.
+      responses:
+        "200":
+          description: Form with field errors.
+          content:
+            text/html:
+              schema:
+                type: string
+        "303":
+          description: Redirect to the settings page.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                example: /users/settings
+        "400":
+          description: Unknown action.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /users/settings/confirm_email/{token}:
+    get:
+      tags: [Auth]
+      operationId: confirmEmailChange
+      summary: Confirm an email change
+      parameters:
+        - $ref: "#/components/parameters/AccountToken"
+      security:
+        - sessionCookie: []
+      responses:
+        "302":
+          description: Redirect to the settings page, or to login when not signed in.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                example: /users/settings
+        "403":
+          $ref: "#/components/responses/Blocked"
+
+  /api/paste:
+    post:
+      tags: [Paste API]
+      operationId: createPasteApi
+      summary: Create a paste with JSON
+      description: |
+        Creates a paste and returns it as JSON.
+        The session cookie is optional.
+        When signed in, the paste is owned by that account.
+        Content over 1 MB is stored in R2.
+        Content over 10 MB is rejected.
+      security:
+        - {}
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasteInput"
+      responses:
+        "201":
+          description: Paste created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Paste"
+        "400":
+          description: Invalid JSON or invalid input.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          description: Content type is not `application/json`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /api/paste/{id}:
+    get:
+      tags: [Paste API]
+      operationId: getPasteApi
+      summary: Read a paste as JSON
+      description: |
+        The `id` may include a file extension, such as `abc123.md`.
+      parameters:
+        - $ref: "#/components/parameters/PasteId"
+      responses:
+        "200":
+          description: Paste found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Paste"
+        "403":
+          $ref: "#/components/responses/Blocked"
+        "404":
+          description: Paste not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-katbin_session
+      description: |
+        Browser session cookie.
+        `GET /` creates an anonymous session when none exists.
+  parameters:
+    PasteId:
+      name: id
+      in: path
+      required: true
+      description: |
+        Paste ID, optionally with a file extension.
+        Generated IDs use alternating consonants and vowels.
+        Custom IDs use letters, digits, `_`, and `-`.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+        example: bikolutagemo
+    AccountToken:
+      name: token
+      in: path
+      required: true
+      description: Token from an account email link.
+      schema:
+        type: string
+        minLength: 1
+  schemas:
+    Csrf:
+      type: string
+      minLength: 1
+      description: |
+        CSRF token from the `_csrf` form field of a rendered page.
+        Required on browser form routes.
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+    PasteInput:
+      type: object
+      required: [paste]
+      properties:
+        paste:
+          type: object
+          required: [content]
+          properties:
+            content:
+              type: string
+              minLength: 1
+              maxLength: 10000000
+    Paste:
+      type: object
+      required: [id, content, is_url]
+      properties:
+        id:
+          type: string
+          example: bikolutagemo
+        content:
+          type: string
+        is_url:
+          type: boolean
+          description: |
+            Whether the content is a URL paste.
+            URL pastes redirect from `/{id}` and render at `/v/{id}`.
+
+  responses:
+    Html:
+      description: HTML page.
+      content:
+        text/html:
+          schema:
+            type: string
+    Redirect303:
+      description: Redirect after a successful action.
+      headers:
+        Location:
+          required: true
+          schema:
+            type: string
+            example: /bikolutagemo
+    Forbidden:
+      description: |
+        Request rejected by origin, session, CSRF, or ban checks.
+        A banned caller that accepts HTML receives the blocked page.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+        text/html:
+          schema:
+            type: string
+    Blocked:
+      description: |
+        IP or account is banned.
+        Requests that accept HTML receive an HTML page.
+      content:
+        text/html:
+          schema:
+            type: string
+    RateLimited:
+      description: Too many requests from this IP.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    PayloadTooLarge:
+      description: Request body exceeds 10 MB.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFoundText:
+      description: Paste not found.
+      content:
+        text/plain:
+          schema:
+            type: string
