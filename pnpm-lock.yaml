@@ -21,8 +21,8 @@ importers:
   .:
     dependencies:
       '@alpinejs/csp':
-        specifier: 3.17.1
-        version: 3.17.1
+        specifier: 3.17.5
+        version: 3.17.5
       bcryptjs:
         specifier: 3.0.3
         version: 3.0.3
@@ -91,8 +91,8 @@ packages:
     resolution: {integrity: sha512-U4+70Pc5ZS9osnCBCE5Jha/ciHM+Yp+CNMNC/7HvYbNRk1Ldd+f7qO65W5qfhu/TCv+/ozljlXXe9Nj8419DMA==}
     engines: {node: '>=10'}
 
-  '@alpinejs/csp@3.17.1':
-    resolution: {integrity: sha512-HDrY0ZxvJWSmeUYqtHVSsitaqy1es3VDCNodPpdQRX4nHhHiRoeib+rOzRFFStFRD/6x0KmQzJVJ4FCLAI/DUQ==}
+  '@alpinejs/csp@3.17.5':
+    resolution: {integrity: sha512-7e5lYgzJJL2eZ7esnx+E7wtxws+VDs9em9ztttZ+AQAYEng2bABHFp2SUga0wt84RyfL7hc6B+S/RGglXsPf6w==}
 
   '@babel/code-frame@7.29.7':
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
@@ -2036,7 +2036,7 @@ snapshots:
 
   '@alloc/quick-lru@5.3.0': {}
 
-  '@alpinejs/csp@3.17.1':
+  '@alpinejs/csp@3.17.5':
     dependencies:
       '@vue/reactivity': 3.5.42
 
