@@ -6,3 +6,4 @@
 .envrc
 .dev.vars
 npm-debug.log
+.vitest/

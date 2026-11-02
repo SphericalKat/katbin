@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("./auth", async () => {
   const actual = await vi.importActual<typeof import("./auth")>("./auth");

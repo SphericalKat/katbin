@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { jsx } from "hono/jsx";
 import { AdminLayout, BansPage, OverviewPage, SearchPage } from "./pages";
 
