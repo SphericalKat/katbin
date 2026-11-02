@@ -1,9 +1,12 @@
-@import "../assets/css/highlight.css";
-@import "../assets/css/markdown.css";
+@import "../assets/css/highlight.css" layer(base);
+@import "../assets/css/markdown.css" layer(base);
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-amber: #ff9800;
+  --color-light-grey: #212121;
+}
 
 @font-face {
   font-family: "JetBrains Mono";
@@ -13,6 +16,35 @@
 }
 
 @layer base {
+  /* Tailwind v4 preflight changed these defaults. Keep the v3 look. */
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: #e5e7eb;
+  }
+
+  /* Pages render in quirks mode, where the browser gives forms this margin. */
+  form {
+    margin-bottom: 1em;
+  }
+
+  input:not([type="checkbox"], [type="radio"]),
+  select {
+    background-color: white;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #9ca3af;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
   [hidden],
   [x-cloak] {
     display: none !important;
