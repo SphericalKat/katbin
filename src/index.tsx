@@ -129,7 +129,7 @@ const PasteContent: FC<{
   if (contentLengthBytes > LARGE_PASTE_BYTES)
     return (
       <textarea
-        class="h-full w-full resize-none bg-light-grey px-6 py-4 font-bold outline-none"
+        class="h-full w-full resize-none bg-light-grey px-6 py-4 font-bold outline-hidden"
         aria-label="Paste content"
         aria-busy="true"
         data-raw-url={rawUrl}
@@ -785,12 +785,12 @@ const Footer: FC = () => (
 );
 
 const keycapClass =
-  "inline-flex h-[20px] min-w-[20px] items-center justify-center rounded-[4px] border border-white/15 bg-white/[0.06] px-1.5 text-[11px] font-medium leading-none text-white/70 [font-family:inherit] shadow-[inset_0_-1px_0_rgba(255,255,255,0.1),0_1px_1px_rgba(0,0,0,0.3)] transition-colors group-hover:border-white/30 group-hover:text-white";
+  "inline-flex h-[20px] min-w-[20px] items-center justify-center rounded-[4px] border border-white/15 bg-white/6 px-1.5 text-[11px] font-medium leading-none text-white/70 font-[inherit] shadow-[inset_0_-1px_0_rgba(255,255,255,0.1),0_1px_1px_rgba(0,0,0,0.3)] transition-colors group-hover:border-white/30 group-hover:text-white";
 
 const SaveButton: FC<{ disabled?: boolean }> = ({ disabled }) => (
   <button
     type="submit"
-    class="group inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-white/15 bg-header px-2.5 text-white shadow-sm transition-all duration-150 enabled:hover:border-white/30 enabled:hover:bg-white/[0.05] enabled:active:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 focus-visible:ring-offset-light-grey disabled:cursor-not-allowed disabled:opacity-40"
+    class="group inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-white/15 bg-header px-2.5 text-white shadow-xs transition-all duration-150 enabled:hover:border-white/30 enabled:hover:bg-white/5 enabled:active:bg-white/8 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 focus-visible:ring-offset-light-grey disabled:cursor-not-allowed disabled:opacity-40"
     aria-label="Save paste"
     title="Save paste"
     disabled={disabled}
@@ -831,7 +831,7 @@ const Home: FC<{ csrf: string; user: User | null; info?: string; error?: string 
         <input type="hidden" name="_csrf" value={csrf} />
         <div class="h-full w-full">
           <textarea
-            class="h-full w-full resize-none bg-light-grey px-6 py-4 font-bold outline-none"
+            class="h-full w-full resize-none bg-light-grey px-6 py-4 font-bold outline-hidden"
             name="paste[content]"
             placeholder="> Paste, save, share! (Pasting just a URL will shorten it!)"
             aria-label="Paste content"
@@ -839,7 +839,7 @@ const Home: FC<{ csrf: string; user: User | null; info?: string; error?: string 
           <div class="absolute right-0 top-0 flex items-center p-4">
             {user ? (
               <input
-                class="mr-2 px-2 py-1 text-black outline-none"
+                class="mr-2 px-2 py-1 text-black outline-hidden"
                 name="paste[custom_url]"
                 placeholder="Custom URL"
                 maxLength={64}
@@ -882,7 +882,7 @@ const RegistrationPage: FC<{ csrf: string; email?: string; errors?: FormErrors }
             name="user[email]"
             type="email"
             value={email}
-            class="px-2 py-1 text-black outline-none"
+            class="px-2 py-1 text-black outline-hidden"
             required
           />
           {errors.email?.map((error) => (
@@ -895,14 +895,14 @@ const RegistrationPage: FC<{ csrf: string; email?: string; errors?: FormErrors }
             id="password"
             name="user[password]"
             type="password"
-            class="px-2 py-1 text-black outline-none"
+            class="px-2 py-1 text-black outline-hidden"
             required
           />
           {errors.password?.map((error) => (
             <span class="text-red-600">{error}</span>
           ))}
         </label>
-        <button type="submit" class="mt-4 rounded-sm bg-amber px-2 py-1">
+        <button type="submit" class="mt-4 rounded-xs bg-amber px-2 py-1">
           Sign up
         </button>
       </form>
@@ -937,7 +937,7 @@ const LoginPage: FC<{ csrf: string; error?: string }> = ({ csrf, error }) => (
             id="login-email"
             name="user[email]"
             type="email"
-            class="px-2 py-1 text-black outline-none"
+            class="px-2 py-1 text-black outline-hidden"
             required
           />
         </label>
@@ -947,7 +947,7 @@ const LoginPage: FC<{ csrf: string; error?: string }> = ({ csrf, error }) => (
             id="login-password"
             name="user[password]"
             type="password"
-            class="px-2 py-1 text-black outline-none"
+            class="px-2 py-1 text-black outline-hidden"
             required
           />
         </label>
@@ -957,11 +957,11 @@ const LoginPage: FC<{ csrf: string; error?: string }> = ({ csrf, error }) => (
             name="user[remember_me]"
             value="true"
             type="checkbox"
-            class="mr-2 outline-none"
+            class="mr-2 outline-hidden"
           />
           Keep me logged in for 60 days
         </label>
-        <button type="submit" class="mt-4 rounded-sm bg-amber px-2 py-1">
+        <button type="submit" class="mt-4 rounded-xs bg-amber px-2 py-1">
           Log in
         </button>
       </form>
@@ -991,11 +991,11 @@ const ConfirmationPage: FC<{ csrf: string }> = ({ csrf }) => (
             id="confirmation-email"
             name="user[email]"
             type="email"
-            class="px-2 py-1 text-black outline-none"
+            class="px-2 py-1 text-black outline-hidden"
             required
           />
         </label>
-        <button type="submit" class="mt-4 rounded-sm bg-amber px-2 py-1">
+        <button type="submit" class="mt-4 rounded-xs bg-amber px-2 py-1">
           Resend confirmation instructions
         </button>
       </form>
@@ -1024,11 +1024,11 @@ const ResetPasswordRequestPage: FC<{ csrf: string }> = ({ csrf }) => (
             id="reset-email"
             name="user[email]"
             type="email"
-            class="px-2 py-1 text-black outline-none"
+            class="px-2 py-1 text-black outline-hidden"
             required
           />
         </label>
-        <button type="submit" class="mt-4 rounded-sm bg-amber px-2 py-1">
+        <button type="submit" class="mt-4 rounded-xs bg-amber px-2 py-1">
           Send instructions to reset password
         </button>
       </form>
@@ -1067,7 +1067,7 @@ const ResetPasswordPage: FC<{ csrf: string; token: string; errors?: FormErrors }
             id="reset-password"
             name="user[password]"
             type="password"
-            class="px-2 py-1 text-black outline-none"
+            class="px-2 py-1 text-black outline-hidden"
             required
           />
           {errors.password?.map((error) => (
@@ -1080,14 +1080,14 @@ const ResetPasswordPage: FC<{ csrf: string; token: string; errors?: FormErrors }
             id="reset-password-confirmation"
             name="user[password_confirmation]"
             type="password"
-            class="px-2 py-1 text-black outline-none"
+            class="px-2 py-1 text-black outline-hidden"
             required
           />
           {errors.password_confirmation?.map((error) => (
             <span class="text-red-600">{error}</span>
           ))}
         </label>
-        <button type="submit" class="mt-4 rounded-sm bg-amber px-2 py-1">
+        <button type="submit" class="mt-4 rounded-xs bg-amber px-2 py-1">
           Reset password
         </button>
       </form>
@@ -1130,7 +1130,7 @@ const SettingsPage: FC<{
               id="settings-email"
               name="user[email]"
               type="email"
-              class="px-2 py-1 text-black outline-none"
+              class="px-2 py-1 text-black outline-hidden"
               required
             />
             {emailErrors.email?.map((error) => (
@@ -1143,14 +1143,14 @@ const SettingsPage: FC<{
               id="settings-email-password"
               name="current_password"
               type="password"
-              class="px-2 py-1 text-black outline-none"
+              class="px-2 py-1 text-black outline-hidden"
               required
             />
             {emailErrors.current_password?.map((error) => (
               <span class="text-red-600">{error}</span>
             ))}
           </label>
-          <button type="submit" class="mt-4 rounded-sm bg-amber px-2 py-1">
+          <button type="submit" class="mt-4 rounded-xs bg-amber px-2 py-1">
             Change email
           </button>
         </form>
@@ -1174,7 +1174,7 @@ const SettingsPage: FC<{
               id="settings-password"
               name="user[password]"
               type="password"
-              class="px-2 py-1 text-black outline-none"
+              class="px-2 py-1 text-black outline-hidden"
               required
             />
             {passwordErrors.password?.map((error) => (
@@ -1187,7 +1187,7 @@ const SettingsPage: FC<{
               id="settings-password-confirmation"
               name="user[password_confirmation]"
               type="password"
-              class="px-2 py-1 text-black outline-none"
+              class="px-2 py-1 text-black outline-hidden"
               required
             />
             {passwordErrors.password_confirmation?.map((error) => (
@@ -1200,14 +1200,14 @@ const SettingsPage: FC<{
               id="settings-password-current"
               name="current_password"
               type="password"
-              class="px-2 py-1 text-black outline-none"
+              class="px-2 py-1 text-black outline-hidden"
               required
             />
             {passwordErrors.current_password?.map((error) => (
               <span class="text-red-600">{error}</span>
             ))}
           </label>
-          <button type="submit" class="mt-4 rounded-sm bg-amber px-2 py-1">
+          <button type="submit" class="mt-4 rounded-xs bg-amber px-2 py-1">
             Change password
           </button>
         </form>
@@ -1248,7 +1248,7 @@ const PastePage: FC<{
           <div class="absolute right-0 top-0 flex items-center gap-2 p-4">
             <button
               type="button"
-              class="flex h-11 w-11 items-center justify-center rounded-sm"
+              class="flex h-11 w-11 items-center justify-center rounded-xs"
               aria-label="Copy original paste content"
               title="Copy original paste content"
               data-copy-raw-url={rawUrl}
@@ -1266,7 +1266,7 @@ const PastePage: FC<{
             {showEdit ? (
               <a
                 href={`/edit/${id}`}
-                class="flex h-11 w-11 items-center justify-center rounded-sm"
+                class="flex h-11 w-11 items-center justify-center rounded-xs"
                 aria-label="Edit paste"
                 title="Edit paste"
               >
@@ -1291,7 +1291,7 @@ const PastePage: FC<{
                 <input type="hidden" name="_csrf" value={csrf} />
                 <button
                   type="submit"
-                  class="flex h-11 w-11 items-center justify-center rounded-sm"
+                  class="flex h-11 w-11 items-center justify-center rounded-xs"
                   aria-label="Delete paste"
                   title="Delete paste"
                 >
@@ -1395,7 +1395,7 @@ const EditPage: FC<{ csrf: string; user: User; paste: { id: string; content: str
         >
           <input type="hidden" name="_csrf" value={csrf} />
           <textarea
-            class="h-full w-full resize-none bg-light-grey px-6 py-4 font-bold outline-none"
+            class="h-full w-full resize-none bg-light-grey px-6 py-4 font-bold outline-hidden"
             name="paste[content]"
             aria-label="Paste content"
           >

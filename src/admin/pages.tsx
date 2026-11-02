@@ -374,7 +374,7 @@ export const SearchPage: FC<SearchPageProps> = ({
           <option value="ip">IP</option>
         </select>
       </label>
-      <button type="submit" class="rounded-sm bg-amber px-3 py-1">
+      <button type="submit" class="rounded-xs bg-amber px-3 py-1">
         Search
       </button>
     </form>
@@ -516,7 +516,7 @@ const BanForm: FC<{
       />
     </label>
     {preview ? <p>Effective range preview: {preview}</p> : null}
-    <button type="submit" class="self-start rounded-sm bg-amber px-3 py-1">
+    <button type="submit" class="self-start rounded-xs bg-amber px-3 py-1">
       Submit
     </button>
   </form>
@@ -541,7 +541,7 @@ const LiftBanForm: FC<{
       {idLabel}
       <input id={idName} name={idName} required class="ml-2 px-2 py-1 text-black" />
     </label>
-    <button type="submit" class="self-start rounded-sm bg-amber px-3 py-1">
+    <button type="submit" class="self-start rounded-xs bg-amber px-3 py-1">
       Lift ban
     </button>
   </form>
@@ -625,7 +625,7 @@ export const DeletionsPage: FC<DeletionsPageProps> = ({ queue, csrf }) => (
         Reason
         <textarea id="deletion-reason" name="reason" required class="ml-2 px-2 py-1 text-black" />
       </label>
-      <button type="submit" class="self-start rounded-sm bg-amber px-3 py-1">
+      <button type="submit" class="self-start rounded-xs bg-amber px-3 py-1">
         Delete paste
       </button>
     </form>
@@ -715,7 +715,7 @@ export const DmcaPage: FC<DmcaPageProps> = ({ cases, csrf }) => (
         Notes
         <textarea id="dmca-notes" name="notes" class="ml-2 px-2 py-1 text-black" />
       </label>
-      <button type="submit" class="self-start rounded-sm bg-amber px-3 py-1">
+      <button type="submit" class="self-start rounded-xs bg-amber px-3 py-1">
         Create case
       </button>
     </form>

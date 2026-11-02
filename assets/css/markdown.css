@@ -8,9 +8,7 @@
   font-weight: 400;
 }
 
-.markdown h1,
-h2,
-h3 {
+.markdown h1 {
   margin-top: 20px;
   margin-bottom: 10px;
 }
@@ -147,8 +145,7 @@ h2 {
   list-style-type: decimal;
 }
 
-.markdown ol,
-ul {
+.markdown ol {
   padding: 0;
   margin-left: 40px;
 }
@@ -173,7 +170,7 @@ ul {
 .markdown ol {
 	list-style: decimal;
 }
-.markdown ul, ol {
+.markdown ul {
 	padding: 0;
 	margin-left: 40px;
 }
