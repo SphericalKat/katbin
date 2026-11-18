@@ -260,14 +260,13 @@ paths:
                   maxLength: 10000000
       responses:
         "303":
-          $ref: "#/components/responses/Redirect303"
-        "302":
-          description: Redirect to the saved paste page when the caller is not the owner.
+          description: Redirect to the saved paste page after updating or when the caller is not the owner.
           headers:
             Location:
               required: true
               schema:
                 type: string
+                example: /bikolutagemo
         "400":
           description: Invalid input.
           content:
@@ -305,14 +304,13 @@ paths:
                   maxLength: 10000000
       responses:
         "303":
-          $ref: "#/components/responses/Redirect303"
-        "302":
-          description: Redirect to the saved paste page when the caller is not the owner.
+          description: Redirect to the saved paste page after updating or when the caller is not the owner.
           headers:
             Location:
               required: true
               schema:
                 type: string
+                example: /bikolutagemo
         "400":
           description: Invalid input.
           content:
@@ -330,8 +328,9 @@ paths:
       operationId: deletePaste
       summary: Delete an owned paste
       description: |
-        Marks the paste as deleted and redirects to the home page.
+        Marks the paste as deleted and redirects to `/pastes` or the home page.
         Only the owner can delete the paste.
+        Non-owners redirect to the saved paste page.
       parameters:
         - $ref: "#/components/parameters/PasteId"
       security:
@@ -346,22 +345,19 @@ paths:
               properties:
                 _csrf:
                   $ref: "#/components/schemas/Csrf"
+                redirect_to:
+                  type: string
+                  enum: ["/pastes"]
+                  description: Redirects to the My Pastes list after deletion.
       responses:
         "303":
-          description: Redirect to the home page.
+          description: Redirect to `/pastes` or `/` after deletion, or to the saved paste page when the caller is not the owner.
           headers:
             Location:
               required: true
               schema:
                 type: string
                 example: /
-        "302":
-          description: Redirect to the saved paste page when the caller is not the owner.
-          headers:
-            Location:
-              required: true
-              schema:
-                type: string
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":

@@ -1375,7 +1375,7 @@ const loginAs = async (db: TestDatabase, email: string) => {
 };
 
 const requestWithMethod = (
-  method: "PATCH" | "PUT",
+  method: "DELETE" | "PATCH" | "PUT",
   cookie: string,
   values: Record<string, string>,
 ) => ({
@@ -1387,6 +1387,18 @@ const requestWithMethod = (
   },
   body: new URLSearchParams(values),
 });
+
+const formInputs = (html: string, action: string) => {
+  const form = html.match(new RegExp(`<form[^>]*action="${action}"[^>]*>([\\s\\S]*?)</form>`))?.[1];
+  expect(form).toBeDefined();
+  const inputs: Record<string, string> = {};
+  for (const [tag] of form!.matchAll(/<input\b[^>]*>/g)) {
+    const name = tag.match(/\bname="([^"]+)"/)?.[1];
+    const value = tag.match(/\bvalue="([^"]*)"/)?.[1];
+    if (name !== undefined && value !== undefined) inputs[name] = value;
+  }
+  return inputs;
+};
 
 describe("owned pastes", () => {
   it("assigns authenticated owners and keeps migrated identifiers readable", async () => {
@@ -1547,7 +1559,7 @@ describe("owned pastes", () => {
       }),
       bindings,
     );
-    expect(unauthorized.status).toBe(302);
+    expect(unauthorized.status).toBe(303);
     expect(unauthorized.headers.get("location")).toBe("/editable");
     const flashCookie = unauthorized.headers.get("set-cookie")!.split(";", 1)[0];
     const redirected = await app.request(
@@ -1557,6 +1569,141 @@ describe("owned pastes", () => {
     );
     expect(await redirected.text()).toContain("You don't own this paste!");
     expect(db.paste("editable")?.content).toBe("small again");
+  });
+
+  it("keeps the owner on the My Pastes list and preserves the flash across fetch redirect", async () => {
+    const db = new TestDatabase();
+    const owner = await loginAs(db, "owner@example.com");
+    for (const id of ["from-list", "remaining"]) {
+      await app.request(
+        "https://katb.in/",
+        formRequest(owner.cookie, {
+          _csrf: owner.csrf,
+          "paste[content]": id,
+          "paste[custom_url]": id,
+        }),
+        { DB: db } as never,
+      );
+    }
+
+    const listing = await app.request(
+      "https://katb.in/pastes",
+      { headers: { Cookie: owner.cookie } },
+      { DB: db } as never,
+    );
+    const deletedFromList = await app.request(
+      "https://katb.in/from-list",
+      requestWithMethod("DELETE", owner.cookie, formInputs(await listing.text(), "/from-list")),
+      { DB: db } as never,
+    );
+
+    expect(deletedFromList.status).toBe(303);
+    expect(deletedFromList.headers.get("location")).toBe("/pastes");
+
+    const cookiesWithFlash = `${owner.cookie}; ${cookieFrom(deletedFromList)}`;
+    const fetchRedirect = await app.request(
+      "https://katb.in/pastes",
+      { headers: { Cookie: cookiesWithFlash, "Sec-Fetch-Mode": "cors" } },
+      { DB: db } as never,
+    );
+    expect(fetchRedirect.status).toBe(200);
+    expect(fetchRedirect.headers.get("set-cookie")).toBeNull();
+    expect(await fetchRedirect.text()).not.toContain("Paste deleted successfully.");
+
+    const updatedListing = await app.request(
+      "https://katb.in/pastes",
+      { headers: { Cookie: cookiesWithFlash, "Sec-Fetch-Mode": "navigate" } },
+      { DB: db } as never,
+    );
+    const updatedListingBody = await updatedListing.text();
+    expect(updatedListing.status).toBe(200);
+    expect(updatedListingBody).toContain("Paste deleted successfully.");
+    expect(updatedListing.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect(updatedListingBody).not.toContain("/v/from-list");
+    expect(updatedListingBody).toContain("/v/remaining");
+    expect(
+      (await app.request("https://katb.in/from-list", undefined, { DB: db } as never)).status,
+    ).toBe(404);
+  });
+
+  it("redirects home when the owner deletes from the saved paste page", async () => {
+    const db = new TestDatabase();
+    const owner = await loginAs(db, "owner@example.com");
+    await app.request(
+      "https://katb.in/",
+      formRequest(owner.cookie, {
+        _csrf: owner.csrf,
+        "paste[content]": "from-page",
+        "paste[custom_url]": "from-page",
+      }),
+      { DB: db } as never,
+    );
+
+    const savedPage = await app.request(
+      "https://katb.in/v/from-page",
+      { headers: { Cookie: owner.cookie } },
+      { DB: db } as never,
+    );
+    const deletedFromPage = await app.request(
+      "https://katb.in/from-page",
+      requestWithMethod("DELETE", owner.cookie, formInputs(await savedPage.text(), "/from-page")),
+      { DB: db } as never,
+    );
+
+    expect(deletedFromPage.status).toBe(303);
+    expect(deletedFromPage.headers.get("location")).toBe("/");
+  });
+
+  it("falls back to the home page when a delete request has an untrusted redirect target", async () => {
+    const db = new TestDatabase();
+    const owner = await loginAs(db, "owner@example.com");
+    await app.request(
+      "https://katb.in/",
+      formRequest(owner.cookie, {
+        _csrf: owner.csrf,
+        "paste[content]": "untrusted-redirect",
+        "paste[custom_url]": "untrusted-redirect",
+      }),
+      { DB: db } as never,
+    );
+
+    const untrustedRedirect = await app.request(
+      "https://katb.in/untrusted-redirect",
+      requestWithMethod("DELETE", owner.cookie, {
+        _csrf: owner.csrf,
+        redirect_to: "https://evil.example",
+      }),
+      { DB: db } as never,
+    );
+
+    expect(untrustedRedirect.status).toBe(303);
+    expect(untrustedRedirect.headers.get("location")).toBe("/");
+  });
+
+  it("redirects a non-owner delete attempt to the saved paste page with 303", async () => {
+    const db = new TestDatabase();
+    const owner = await loginAs(db, "owner@example.com");
+    const other = await loginAs(db, "other@example.com");
+    await app.request(
+      "https://katb.in/",
+      formRequest(owner.cookie, {
+        _csrf: owner.csrf,
+        "paste[content]": "protected",
+        "paste[custom_url]": "protected",
+      }),
+      { DB: db } as never,
+    );
+
+    const unauthorized = await app.request(
+      "https://katb.in/protected",
+      requestWithMethod("DELETE", other.cookie, { _csrf: other.csrf, redirect_to: "/pastes" }),
+      { DB: db } as never,
+    );
+    expect(unauthorized.status).toBe(303);
+    expect(unauthorized.headers.get("location")).toBe("/protected");
+    expect(
+      (await app.request("https://katb.in/protected", undefined, { DB: db } as never)).status,
+    ).toBe(200);
   });
 });
 

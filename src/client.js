@@ -1,3 +1,11 @@
+const AUTO_DISMISS_MS = 2500;
+
+document.querySelectorAll("[data-auto-dismiss]").forEach((element) => {
+  window.setTimeout(() => {
+    element.remove();
+  }, AUTO_DISMISS_MS);
+});
+
 const registerAccountMenu = () => {
   window.Alpine?.data("accountMenu", () => ({
     open: false,
