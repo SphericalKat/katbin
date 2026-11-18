@@ -210,6 +210,8 @@ const SCRYPT_KEY_LENGTH = 32;
 const FLASH_COOKIE = "__Host-katbin_flash";
 const INFO_FLASH_COOKIE = "__Host-katbin_info_flash";
 const OWNERSHIP_ERROR = "You don't own this paste!";
+const PASTE_DELETED_MESSAGE = "Paste deleted successfully.";
+const PASTES_PATH = "/pastes";
 const consonants = "bcdfghjklmnpqrstvwxyz";
 const vowels = "aeiou";
 const customIdPattern = /^[A-Za-z0-9_-]{1,64}$/;
@@ -477,6 +479,8 @@ const setFlash = (c: AppContext, type: "error" | "info", message: string) => {
 };
 
 const takeTypedFlash = (c: AppContext, type: "error" | "info") => {
+  const fetchMode = c.req.header("Sec-Fetch-Mode");
+  if (fetchMode && fetchMode !== "navigate") return undefined;
   const name = type === "error" ? FLASH_COOKIE : INFO_FLASH_COOKIE;
   const flash = getCookie(c, name);
   if (flash) deleteCookie(c, name, { httpOnly: true, sameSite: "Lax", secure: true, path: "/" });
@@ -485,7 +489,7 @@ const takeTypedFlash = (c: AppContext, type: "error" | "info") => {
 
 const ownershipError = (c: AppContext, id: string) => {
   setFlash(c, "error", OWNERSHIP_ERROR);
-  return c.redirect(`/${encodeURIComponent(id)}`, 302);
+  return c.redirect(`/${encodeURIComponent(id)}`, c.req.method === "GET" ? 302 : 303);
 };
 
 const takeFlash = (c: AppContext) => {
@@ -695,10 +699,22 @@ const validCsrf = async (c: AppContext, token: string, form: Record<string, stri
   return csrf.success && sameValue(csrf.data._csrf, await csrfToken(token));
 };
 
-const FlashMessages: FC<{ info?: string; error?: string }> = ({ info, error }) => (
+const FlashMessages: FC<{
+  info?: string;
+  error?: string;
+  autoDismissInfo?: boolean;
+}> = ({ info, error, autoDismissInfo }) => (
   <>
     {info ? (
-      <p class="alert alert-info" role="status">
+      <p
+        class={
+          autoDismissInfo
+            ? "alert alert-info pointer-events-none fixed bottom-8 left-1/2 z-50 w-max max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-xs shadow-xs"
+            : "alert alert-info"
+        }
+        role="status"
+        data-auto-dismiss={autoDismissInfo ? "" : undefined}
+      >
         {info}
       </p>
     ) : null}
@@ -741,7 +757,7 @@ const Header: FC<{ csrf?: string; user?: User | null }> = ({ csrf, user }) => (
                 <a href="/users/settings">Settings</a>
               </li>
               <li>
-                <a href="/pastes">My Pastes</a>
+                <a href={PASTES_PATH}>My Pastes</a>
               </li>
               {csrf ? (
                 <li>
@@ -817,16 +833,17 @@ const SaveButton: FC<{ disabled?: boolean }> = ({ disabled }) => (
   </button>
 );
 
-const Home: FC<{ csrf: string; user: User | null; info?: string; error?: string }> = ({
-  csrf,
-  user,
-  info,
-  error,
-}) => (
+const Home: FC<{
+  csrf: string;
+  user: User | null;
+  info?: string;
+  error?: string;
+  autoDismissInfo?: boolean;
+}> = ({ csrf, user, info, error, autoDismissInfo }) => (
   <>
     <Header csrf={csrf} user={user} />
     <main class="flex h-full max-h-full w-full flex-col overflow-hidden bg-light-grey">
-      <FlashMessages info={info} error={error} />
+      <FlashMessages info={info} error={error} autoDismissInfo={autoDismissInfo} />
       <form class="relative flex h-full w-full flex-col" action="/" method="post" data-paste-form>
         <input type="hidden" name="_csrf" value={csrf} />
         <div class="h-full w-full">
@@ -1321,11 +1338,14 @@ const PastePage: FC<{
   </html>
 );
 
-const PastesPage: FC<{ csrf: string; user: User; pastes: Array<{ id: string }> }> = ({
-  csrf,
-  user,
-  pastes,
-}) => (
+const PastesPage: FC<{
+  csrf: string;
+  user: User;
+  pastes: Array<{ id: string }>;
+  info?: string;
+  error?: string;
+  autoDismissInfo?: boolean;
+}> = ({ csrf, user, pastes, info, error, autoDismissInfo }) => (
   <html lang="en">
     <head>
       <meta charset="utf-8" />
@@ -1337,6 +1357,7 @@ const PastesPage: FC<{ csrf: string; user: User; pastes: Array<{ id: string }> }
     <body class="flex h-full flex-col">
       <Header csrf={csrf} user={user} />
       <main class="flex h-full w-full flex-col overflow-hidden bg-light-grey">
+        <FlashMessages info={info} error={error} autoDismissInfo={autoDismissInfo} />
         <ul class="grid max-w-full grid-cols-[minmax(0,max-content)_auto] items-center justify-start gap-x-4 overflow-x-hidden overflow-y-auto px-6 py-4">
           {pastes.map((paste) => (
             <li class="contents">
@@ -1351,6 +1372,7 @@ const PastesPage: FC<{ csrf: string; user: User; pastes: Array<{ id: string }> }
                 data-confirm="Are you sure you want to delete this paste?"
               >
                 <input type="hidden" name="_csrf" value={csrf} />
+                <input type="hidden" name="redirect_to" value={PASTES_PATH} />
                 <button
                   type="submit"
                   class="translate-y-px"
@@ -2093,6 +2115,7 @@ app.get("/", async (c) => {
     setSessionCookie(c, token);
   }
   const user = await getCurrentUser(c.env, session);
+  const info = takeTypedFlash(c, "info");
   return c.html(
     <html lang="en">
       <head>
@@ -2111,8 +2134,9 @@ app.get("/", async (c) => {
         <Home
           csrf={await csrfToken(token!)}
           user={user}
-          info={takeTypedFlash(c, "info")}
+          info={info}
           error={takeTypedFlash(c, "error")}
+          autoDismissInfo={info === PASTE_DELETED_MESSAGE}
         />
       </body>
     </html>,
@@ -2856,7 +2880,7 @@ const findPaste = async (c: AppContext, value: string, includeContent = true) =>
   return { paste, extension: path.extension };
 };
 
-app.get("/pastes", async (c) => {
+app.get(PASTES_PATH, async (c) => {
   const { token, session } = await sessionFromRequest(c);
   const user = await getCurrentUser(c.env, session);
   if (!token || !session?.userId || !user) return c.redirect("/users/log_in", 302);
@@ -2867,7 +2891,17 @@ app.get("/pastes", async (c) => {
     .from(pastes)
     .where(and(eq(pastes.ownerId, user.id), isNull(pastes.deletedAt)))
     .all();
-  return c.html(<PastesPage csrf={await csrfToken(token)} user={user} pastes={ownedPastes} />);
+  const info = takeTypedFlash(c, "info");
+  return c.html(
+    <PastesPage
+      csrf={await csrfToken(token)}
+      user={user}
+      pastes={ownedPastes}
+      info={info}
+      error={takeTypedFlash(c, "error")}
+      autoDismissInfo={info === PASTE_DELETED_MESSAGE}
+    />,
+  );
 });
 
 app.get("/edit/:id", async (c) => {
@@ -2965,8 +2999,8 @@ app.delete("/:id", async (c) => {
     .update(pastes)
     .set({ deletedAt: timestamp, updatedAt: timestamp })
     .where(eq(pastes.id, result.paste.id));
-  setFlash(c, "info", "Paste deleted successfully.");
-  return c.redirect("/", 303);
+  setFlash(c, "info", PASTE_DELETED_MESSAGE);
+  return c.redirect(form.redirect_to === PASTES_PATH ? PASTES_PATH : "/", 303);
 });
 
 app.get("/:id/raw", async (c) => {
