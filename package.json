@@ -14,7 +14,7 @@
     "replicate": "node tools/replicate-postgres.ts"
   },
   "dependencies": {
-    "@alpinejs/csp": "3.17.1",
+    "@alpinejs/csp": "3.17.5",
     "bcryptjs": "3.0.3",
     "drizzle-orm": "^0.45.2",
     "highlight.js": "^11.12.0",
